@@ -1,6 +1,7 @@
 CC      := gcc
 CFLAGS  := -Wall -Wextra -std=c11 -D_GNU_SOURCE -O2 -g
 LDFLAGS := -lncursesw
+LDFLAGS_STATIC := -static -lncursesw -ltinfo
 
 SRCDIR  := src
 OBJDIR  := obj
@@ -9,12 +10,17 @@ TARGET  := visormd
 SRCS    := $(wildcard $(SRCDIR)/*.c)
 OBJS    := $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRCS))
 
-.PHONY: all clean install test
+.PHONY: all static clean install test
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Portable static binary — compatible with older distros (GLIBC 2.35+).
+# Requires: sudo apt install libncursesw5-dev (on dev machine).
+static: $(OBJS)
+	$(CC) $(CFLAGS) -o $(TARGET) $^ $(LDFLAGS_STATIC)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
