@@ -1,0 +1,28 @@
+# 📝 Tema: 10 herramientas modernas de línea de comandos para Linux
+
+## 🔍 Resumen general
+
+El autor relata cómo ha pasado mucho tiempo en la terminal y descubrió que,
+aunque herramientas clásicas como `cat`, `grep`, `find` y `cd` son legendarias,
+una nueva generación de herramientas aporta mejoras sustanciales (búsqueda difusa,
+resaltado de sintaxis, paneles interactivos, navegación inteligente)
+que transforman la experiencia en la terminal.
+
+---
+
+### 🚀 Las herramientas
+
+| # | Herramienta | Categoría |
+|---|---|
+| 1 | **fzf** | Búsqueda difusa |
+| 2 | **bat** | Visor de archivos |
+| 3 | **ripgrep (rg)** | Búsqueda en texto |
+| 4 | **fd** | Búsqueda de archivos |
+| 5 | **zoxide** | Navegación inteligente |
+| 6 | **delta** | Diff avanzado |
+
+### 💡 Conclusión
+
+✅ Más productividad
+✅ Mejor experiencia visual
+✅ Flujo de trabajo moderno

@@ -1,0 +1,11 @@
+# Binarios compilados
+visormd
+obj/
+
+# Configuración personal de Claude Code
+.claude/
+
+# Archivos de respaldo
+*~
+*.swp
+*.swo

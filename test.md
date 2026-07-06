@@ -1,0 +1,48 @@
+# Encabezado Nivel 1
+## Encabezado Nivel 2
+### Encabezado Nivel 3
+#### Encabezado Nivel 4
+##### Encabezado Nivel 5
+###### Encabezado Nivel 6
+
+Esto es un párrafo con **negrita**, *itálica* y `código en línea`.
+También soporta ***negrita-itálica*** combinada.
+
+---
+
+## Enlaces
+
+Visita [Claude Code](https://claude.ai/code) para más información.
+
+## Citas
+
+> Esto es una cita.
+> Puede ocupar varias líneas.
+
+## Código
+
+```c
+#include <stdio.h>
+int main() {
+    printf("hola mundo\n");
+    return 0;
+}
+```
+
+## Listas
+
+- Item A
+- Item B
+  - Sub-item B1
+  - Sub-item B2
+- Item C
+
+1. Primer paso
+2. Segundo paso
+3. Tercer paso
+
+---
+
+Línea larga para probar wrapping: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+**Fin del documento.**
