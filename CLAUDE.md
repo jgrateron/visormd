@@ -28,7 +28,10 @@ VisorMD is a terminal-based interactive Markdown viewer, written in C11 with ncu
 
 ```
 File → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) → Renderer (ncurses)
+                                                                   → cat_renderer (stdout + ANSI)
 ```
+
+The default mode is interactive (ncurses). With `-c`/`--cat`, the pipeline branches to `cat_renderer` which dumps the document to stdout with ANSI escape codes and exits immediately — no ncurses dependency in that path.
 
 1. **`src/buffer.c`** — `TextBuffer`: reads a file into a dynamic array of raw UTF-8 strings (one per line). Owns the file I/O and is discarded after parsing.
 
@@ -45,12 +48,19 @@ File → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) → Rende
    - `renderer_draw` iterates from the scroll position, renders each source line (with wrapping) until the screen is filled, then draws the status bar.
    - Terminal resize is handled via `KEY_RESIZE` → `renderer_resize`, which re-measures and re-clamps scroll state.
 
-4. **`src/theme.c`** — Color theme system:
+4. **`src/cat_renderer.c`** — Non-interactive stdout renderer (triggered by `-c`/`--cat`):
+   - Iterates the parsed `Document` and writes each `ParsedLine` to stdout.
+   - Maps `SpanType` + `LineType` to ANSI escape codes (bold, italic, underline, 16 SGR colors) — same logic as `span_attr()` in renderer.c but for ANSI terminals.
+   - Tables are rendered with Unicode box-drawing characters and cell wrapping (same column-width algorithm as the ncurses renderer).
+   - Checks `isatty(STDOUT_FILENO)`: if stdout is not a terminal (pipe/redirect), ANSI codes are suppressed — plain text only.
+   - Does not depend on ncurses; only the parser, `<stdio.h>`, `<wchar.h>`, and `<sys/ioctl.h>`.
+
+5. **`src/theme.c`** — Color theme system:
    - Defines 8 named theme palettes as `static const Theme` structs, each specifying fg/bg for all 16 color pairs.
    - Config I/O: reads/writes `theme=<id>` in `$HOME/.config/visormd/config` (with `$XDG_CONFIG_HOME` support).
    - Theme selector overlay (triggered by F2) is implemented as a static function in `renderer.c` since it needs intimate access to ncurses windows.
 
-5. **`src/main.c`** — Entry point: argument parsing (single filename or `-h`), locale setup (tries `""`, `C.UTF-8`, `en_US.UTF-8` in that order), then wires the pipeline and runs the input loop until `q`.
+6. **`src/main.c`** — Entry point: argument parsing (`-c`/`--cat` for stdout dump, `-h` for help, or a single filename), locale setup (tries `""`, `C.UTF-8`, `en_US.UTF-8` in that order). When `cat_mode` is set, calls `cat_render()` and exits; otherwise wires the pipeline through the ncurses renderer and runs the input loop until `q`.
 
 ### Keybindings (hardcoded in `renderer_handle_input`)
 

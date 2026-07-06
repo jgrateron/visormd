@@ -1,4 +1,5 @@
 #include "buffer.h"
+#include "cat_renderer.h"
 #include "parser.h"
 #include "renderer.h"
 #include <locale.h>
@@ -12,7 +13,11 @@ static void usage(const char *prog) {
             "\n"
             "Visor interactivo de Markdown para terminal.\n"
             "\n"
-            "Teclas durante la visualización:\n"
+            "Opciones:\n"
+            "  -c, --cat   Volcar el contenido renderizado a stdout y salir\n"
+            "  -h, --help  Mostrar esta ayuda\n"
+            "\n"
+            "Teclas durante la visualización interactiva:\n"
             "  q         Salir\n"
             "  j / ↓     Desplazar una línea hacia abajo\n"
             "  k / ↑     Desplazar una línea hacia arriba\n"
@@ -24,18 +29,25 @@ static void usage(const char *prog) {
             "  w         Alternar ajuste de palabras\n"
             "  F2        Seleccionar tema de colores\n"
             "\n"
-            "Ejemplo: %s README.md\n",
-            prog, prog);
+            "Ejemplos:\n"
+            "  %s README.md           # modo interactivo\n"
+            "  %s --cat README.md     # volcar a consola\n",
+            prog, prog, prog);
 }
 
 int main(int argc, char **argv) {
     const char *filename = NULL;
+    int         cat_mode = 0;
 
     /* parsear argumentos */
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             usage(argv[0]);
             return 0;
+        }
+        if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--cat") == 0) {
+            cat_mode = 1;
+            continue;
         }
         if (argv[i][0] == '-') {
             fprintf(stderr, "%s: opción desconocida: %s\n", argv[0], argv[i]);
@@ -80,25 +92,31 @@ int main(int argc, char **argv) {
     doc_parse(doc, buf->lines, buf->count);
     buffer_free(buf);  /* ya no necesitamos las líneas crudas */
 
-    /* ── iniciar renderer ncurses ── */
-    Renderer *renderer = renderer_create(doc, filename);
-    if (!renderer) {
-        fprintf(stderr, "%s: error al iniciar ncurses\n", argv[0]);
-        doc_free(doc);
-        return 1;
+    if (cat_mode) {
+        /* ── modo cat: volcar a stdout y salir ── */
+        cat_render(doc);
+    } else {
+        /* ── iniciar renderer ncurses ── */
+        Renderer *renderer = renderer_create(doc, filename);
+        if (!renderer) {
+            fprintf(stderr, "%s: error al iniciar ncurses\n", argv[0]);
+            doc_free(doc);
+            return 1;
+        }
+
+        /* ── bucle principal ── */
+        renderer_draw(renderer);
+        int quit = 0;
+        while (!quit) {
+            int ch = renderer_getch(renderer);
+            quit = renderer_handle_input(renderer, ch);
+            if (!quit) renderer_draw(renderer);
+        }
+
+        /* ── limpiar ── */
+        renderer_free(renderer);
     }
 
-    /* ── bucle principal ── */
-    renderer_draw(renderer);
-    int quit = 0;
-    while (!quit) {
-        int ch = renderer_getch(renderer);
-        quit = renderer_handle_input(renderer, ch);
-        if (!quit) renderer_draw(renderer);
-    }
-
-    /* ── limpiar ── */
-    renderer_free(renderer);
     doc_free(doc);
 
     return 0;

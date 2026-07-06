@@ -58,10 +58,15 @@ The binary is a standalone executable with no runtime dependencies beyond `libnc
 ## Usage
 
 ```bash
-visormd <file.md>
+visormd [OPCIONES] <file.md>
 ```
 
-Pass `-h` or `--help` to see the help message.
+| Option | Description |
+|--------|-------------|
+| `-c`, `--cat` | Dump rendered Markdown to stdout with ANSI colors and exit (no ncurses) |
+| `-h`, `--help` | Show the help message |
+
+Without options, the program starts in interactive mode with ncurses.
 
 ### Keybindings
 
@@ -88,13 +93,15 @@ TERM=xterm-256color LANG=C.UTF-8 timeout 1 ./visormd test.md; echo "exit: $?"
 
 ```
 File → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) → Renderer (ncurses)
+                                                                   → cat_renderer (stdout + ANSI)
 ```
 
 - **`src/buffer.c`** — Reads a file into a dynamic array of raw UTF-8 strings.
 - **`src/parser.c`** — Parses Markdown into a `Document` tree: classifies line types, extracts inline spans (bold, italic, code, links), parses table blocks with column alignment.
 - **`src/renderer.c`** — ncursesw interactive viewer: renders spans with color attributes, handles line wrapping, scroll state, terminal resize, and the theme selector overlay.
+- **`src/cat_renderer.c`** — Non-interactive stdout renderer used by `--cat`/`-c`: iterates the parsed document and emits plain text with ANSI escape codes (disabled when stdout is not a TTY).
 - **`src/theme.c`** — 8 named color palettes with config persistence in `$HOME/.config/visormd/config` (respects `$XDG_CONFIG_HOME`).
-- **`src/main.c`** — Entry point: locale setup, wires the pipeline, runs the input loop.
+- **`src/main.c`** — Entry point: argument parsing (filename, `-c`/`--cat`, `-h`), locale setup, wires the pipeline, runs either the cat renderer or the interactive loop.
 
 ## Configuration
 
