@@ -23,9 +23,13 @@
 #define CP_TABLE_BORDER  17
 #define CP_TABLE_HEADER  18
 #define CP_HIGHLIGHT     19
+#define CP_BASH_COMMAND  20
+#define CP_BASH_STRING   21
+#define CP_BASH_VARIABLE 22
+#define CP_BASH_KEYWORD  23
 
 #define CP_FIRST  1
-#define CP_COUNT  20   /* índices 1..19, posición 0 sin usar */
+#define CP_COUNT  24   /* índices 1..23, posición 0 sin usar */
 
 /* ── un par foreground / background ── */
 typedef struct {

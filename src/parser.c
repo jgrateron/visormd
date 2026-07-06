@@ -54,12 +54,16 @@ static void add_span(ParsedLine *line, const char *text,
     s->url  = url  ? strdup(url)  : NULL;
 }
 
-static void flush_normal(CharBuf *buf, ParsedLine *line) {
+static void flush_buf(CharBuf *buf, ParsedLine *line, SpanType type) {
     if (buf->len > 0) {
         char *text = cb_detach(buf);
-        add_span(line, text, SPAN_NORMAL, NULL);
+        add_span(line, text, type, NULL);
         free(text);
     }
+}
+
+static void flush_normal(CharBuf *buf, ParsedLine *line) {
+    flush_buf(buf, line, SPAN_NORMAL);
 }
 
 /* ──────────────────────────────────────────────
@@ -257,6 +261,170 @@ static int is_bare_fence(const char *line) {
     line += 3;
     while (*line == ' ' || *line == '\t') line++;
     return (*line == '\0');
+}
+
+/* extrae el especificador de lenguaje de una cerca de código
+ * ej: "```bash" → "bash", "```python" → "python", "```" → "" */
+static void extract_fence_lang(const char *fence, char *lang, int lang_cap) {
+    const char *p = fence;
+    while (*p == ' ') p++;
+    if ((p[0] == '`' && p[1] == '`' && p[2] == '`') ||
+        (p[0] == '~' && p[1] == '~' && p[2] == '~'))
+        p += 3;
+    while (*p == ' ' || *p == '\t') p++;
+    int i = 0;
+    while (*p && *p != ' ' && *p != '\t' && i < lang_cap - 1)
+        lang[i++] = *p++;
+    lang[i] = '\0';
+}
+
+/* ──────────────────────────────────────────────
+ * tokenizador bash: ¿es una palabra clave?
+ * ────────────────────────────────────────────── */
+static int is_bash_keyword(const char *word) {
+    static const char *keywords[] = {
+        "if", "then", "else", "elif", "fi",
+        "for", "while", "do", "done", "case", "esac",
+        "function", "in", "select", "until",
+        NULL
+    };
+    for (int i = 0; keywords[i]; i++) {
+        if (strcmp(word, keywords[i]) == 0) return 1;
+    }
+    return 0;
+}
+
+/* ──────────────────────────────────────────────
+ * tokenizador bash: convierte una línea en spans
+ * con resaltado de sintaxis (comandos, strings,
+ * variables, keywords)
+ * ────────────────────────────────────────────── */
+static void parse_bash_line(ParsedLine *line, const char *text) {
+    int len = (int)strlen(text);
+    int i   = 0;
+    int command_pos = 1;  /* inicio de línea → posición de comando */
+    CharBuf buf;
+    cb_init(&buf);
+
+    while (i < len) {
+        /* ── espacios: acumular como normal ── */
+        if (text[i] == ' ' || text[i] == '\t') {
+            cb_append(&buf, text[i++]);
+            continue;
+        }
+
+        /* ── comentario: resto de línea sin color ── */
+        if (text[i] == '#') {
+            flush_buf(&buf, line, SPAN_BASH_NORMAL);
+            add_span(line, text + i, SPAN_BASH_NORMAL, NULL);
+            return;
+        }
+
+        /* ── string con comillas dobles ── */
+        if (text[i] == '"') {
+            flush_buf(&buf, line, SPAN_BASH_NORMAL);
+            int start = i;
+            i++;
+            while (i < len && text[i] != '"') {
+                if (text[i] == '\\' && i + 1 < len) i++;
+                i++;
+            }
+            if (i < len) i++;
+            char *s = strndup(text + start, (size_t)(i - start));
+            add_span(line, s, SPAN_BASH_STRING, NULL);
+            free(s);
+            command_pos = 0;
+            continue;
+        }
+
+        /* ── string con comillas simples ── */
+        if (text[i] == '\'') {
+            flush_buf(&buf, line, SPAN_BASH_NORMAL);
+            int start = i;
+            i++;
+            while (i < len && text[i] != '\'') i++;
+            if (i < len) i++;
+            char *s = strndup(text + start, (size_t)(i - start));
+            add_span(line, s, SPAN_BASH_STRING, NULL);
+            free(s);
+            command_pos = 0;
+            continue;
+        }
+
+        /* ── variable: $VAR, ${VAR}, $1, $@, etc. ── */
+        if (text[i] == '$' && text[i + 1] != '\0' && text[i + 1] != ' ' &&
+            text[i + 1] != '\t') {
+            flush_buf(&buf, line, SPAN_BASH_NORMAL);
+            int start = i;
+            i++;  /* saltar $ */
+            if (text[i] == '{') {
+                i++;
+                while (i < len && text[i] != '}') i++;
+                if (i < len) i++;
+            } else if (isdigit((unsigned char)text[i]) ||
+                       text[i] == '@' || text[i] == '#' || text[i] == '?' ||
+                       text[i] == '!' || text[i] == '-' || text[i] == '$' ||
+                       text[i] == '*') {
+                i++;
+            } else {
+                while (i < len && (isalnum((unsigned char)text[i]) ||
+                                   text[i] == '_')) i++;
+            }
+            char *var = strndup(text + start, (size_t)(i - start));
+            add_span(line, var, SPAN_BASH_VARIABLE, NULL);
+            free(var);
+            command_pos = 0;
+            continue;
+        }
+
+        /* ── operadores que separan comandos ── */
+        if ((text[i] == '|' && text[i + 1] == '|') ||
+            (text[i] == '&' && text[i + 1] == '&')) {
+            flush_buf(&buf, line, SPAN_BASH_NORMAL);
+            char op[3] = {text[i], text[i + 1], '\0'};
+            add_span(line, op, SPAN_BASH_NORMAL, NULL);
+            i += 2;
+            command_pos = 1;
+            continue;
+        }
+        if (text[i] == '|' || text[i] == ';') {
+            flush_buf(&buf, line, SPAN_BASH_NORMAL);
+            char op[2] = {text[i], '\0'};
+            add_span(line, op, SPAN_BASH_NORMAL, NULL);
+            i++;
+            command_pos = 1;
+            continue;
+        }
+
+        /* ── palabra: comando, keyword, o argumento ── */
+        if (isalnum((unsigned char)text[i]) || text[i] == '_' ||
+            text[i] == '-' || text[i] == '/' || text[i] == '.') {
+            flush_buf(&buf, line, SPAN_BASH_NORMAL);
+            int start = i;
+            while (i < len && (isalnum((unsigned char)text[i]) ||
+                   text[i] == '_' || text[i] == '-' ||
+                   text[i] == '/' || text[i] == '.')) {
+                i++;
+            }
+            char *word = strndup(text + start, (size_t)(i - start));
+
+            if (is_bash_keyword(word)) {
+                add_span(line, word, SPAN_BASH_KEYWORD, NULL);
+            } else if (command_pos) {
+                add_span(line, word, SPAN_BASH_COMMAND, NULL);
+            } else {
+                add_span(line, word, SPAN_BASH_NORMAL, NULL);
+            }
+            free(word);
+            command_pos = 0;
+            continue;
+        }
+
+        /* ── cualquier otro carácter (operadores, etc.) ── */
+        cb_append(&buf, text[i++]);
+    }
+
+    flush_buf(&buf, line, SPAN_BASH_NORMAL);
 }
 
 /* ──────────────────────────────────────────────
@@ -671,8 +839,9 @@ static void doc_add_line(Document *doc, ParsedLine *line) {
 }
 
 int doc_parse(Document *doc, char **raw_lines, int raw_count) {
-    int in_code_block = 0;
-    int in_highlight  = 0;
+    int  in_code_block = 0;
+    int  in_highlight  = 0;
+    char code_lang[32] = "";
 
     for (int i = 0; i < raw_count; i++) {
         ParsedLine line = {0};
@@ -697,9 +866,8 @@ int doc_parse(Document *doc, char **raw_lines, int raw_count) {
             if (in_code_block) {
                 /* cualquier cerca cierra un bloque de código */
                 in_code_block = 0;
-                line.type  = LINE_CODE_BLOCK;
-                add_span(&line, raw_lines[i], SPAN_NORMAL, NULL);
-                doc_add_line(doc, &line);
+                code_lang[0]  = '\0';
+                /* no se emite la cerca de cierre */
             } else if (in_highlight) {
                 /* cualquier cerca cierra un bloque resaltado */
                 in_highlight = 0;
@@ -711,9 +879,8 @@ int doc_parse(Document *doc, char **raw_lines, int raw_count) {
             } else {
                 /* cerca con lenguaje: abre bloque de código */
                 in_code_block = 1;
-                line.type  = LINE_CODE_BLOCK;
-                add_span(&line, raw_lines[i], SPAN_NORMAL, NULL);
-                doc_add_line(doc, &line);
+                extract_fence_lang(raw_lines[i], code_lang, sizeof(code_lang));
+                /* no se emite la cerca de apertura */
             }
             continue;
         }
@@ -728,8 +895,16 @@ int doc_parse(Document *doc, char **raw_lines, int raw_count) {
 
         /* ── dentro de un bloque de código ── */
         if (in_code_block) {
-            line.type  = LINE_CODE_BLOCK;
-            add_span(&line, raw_lines[i], SPAN_NORMAL, NULL);
+            line.type = LINE_CODE_BLOCK;
+            /* ¿bash / sh? tokenizar con resaltado */
+            if (code_lang[0] &&
+                (strcmp(code_lang, "bash") == 0 ||
+                 strcmp(code_lang, "sh")   == 0 ||
+                 strcmp(code_lang, "zsh")  == 0)) {
+                parse_bash_line(&line, raw_lines[i]);
+            } else {
+                add_span(&line, raw_lines[i], SPAN_NORMAL, NULL);
+            }
             doc_add_line(doc, &line);
             continue;
         }

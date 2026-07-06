@@ -37,6 +37,11 @@ typedef enum {
     SPAN_LINK_URL,
     SPAN_LIST_MARKER,
     SPAN_TABLE_PIPE,
+    SPAN_BASH_COMMAND,
+    SPAN_BASH_STRING,
+    SPAN_BASH_VARIABLE,
+    SPAN_BASH_KEYWORD,
+    SPAN_BASH_NORMAL,
 } SpanType;
 
 /* ── un fragmento de texto con un estilo uniforme ── */

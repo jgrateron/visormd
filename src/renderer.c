@@ -119,6 +119,11 @@ static chtype span_attr(SpanType st, LineType lt) {
         case SPAN_CODE:        cp = CP_CODE;                       break;
         case SPAN_LINK_TEXT:   cp = CP_LINK;   at = A_UNDERLINE;   break;
         case SPAN_LINK_URL:    cp = CP_LINK;                       break;
+        case SPAN_BASH_COMMAND:cp = CP_BASH_COMMAND; at = A_BOLD;  break;
+        case SPAN_BASH_STRING: cp = CP_BASH_STRING;                break;
+        case SPAN_BASH_VARIABLE:cp= CP_BASH_VARIABLE;              break;
+        case SPAN_BASH_KEYWORD:cp = CP_BASH_KEYWORD; at = A_BOLD;  break;
+        case SPAN_BASH_NORMAL:cp = CP_DEFAULT;                    break;
         default:               cp = CP_DEFAULT;                    break;
         }
     }
