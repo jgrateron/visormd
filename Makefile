@@ -9,7 +9,7 @@ TARGET  := visormd
 SRCS    := $(wildcard $(SRCDIR)/*.c)
 OBJS    := $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRCS))
 
-.PHONY: all clean install
+.PHONY: all clean install test
 
 all: $(TARGET)
 
@@ -27,3 +27,19 @@ clean:
 
 install: $(TARGET)
 	install -m 755 $(TARGET) /usr/local/bin/$(TARGET)
+
+test: $(TARGET)
+	@passed=0; failed=0; \
+	for f in test.md test_emoji.md test_table.md test_table2.md test_user.md test_utf8.md test_wide.md; do \
+		base=$${f%.md}; \
+		if TERM=xterm-256color LANG=C.UTF-8 ./$(TARGET) --cat "$$f" | diff - "$${base}_expected.txt" > /dev/null 2>&1; then \
+			echo "OK: $$f"; \
+			passed=$$((passed + 1)); \
+		else \
+			echo "FAIL: $$f"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo "------------------------------"; \
+	echo "Pasaron: $$passed | Fallaron: $$failed"; \
+	if [ $$failed -gt 0 ]; then exit 1; fi

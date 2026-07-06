@@ -18,7 +18,35 @@ To quickly test rendering with a sample file:
 TERM=xterm-256color LANG=C.UTF-8 timeout 1 ./visormd test.md; echo "exit: $?"
 ```
 
-There is no test suite or lint configuration.
+### Test suite
+
+```bash
+make test           # Build and run all verification tests
+make clean test     # Clean rebuild and test
+```
+
+Test Markdown inputs (`test*.md`) and their expected plain-text outputs (`test*_expected.txt`) live in the repo root. The expected files were generated with `--cat` redirected to a file (no ANSI codes — `cat_renderer` suppresses them when stdout is not a tty). The `test` target compares each `test*.md` against its `test*_expected.txt` via `diff`.
+
+To regenerate expected outputs after a rendering change:
+
+```bash
+for f in test.md test_emoji.md test_table.md test_table2.md test_user.md test_utf8.md test_wide.md; do
+    base="${f%.md}"
+    TERM=xterm-256color LANG=C.UTF-8 ./visormd --cat "$f" > "${base}_expected.txt"
+done
+```
+
+**Test file coverage:**
+
+| File | What it exercises |
+|------|-------------------|
+| `test.md` | Headings H1–H6, bold, italic, bold-italic, inline code, links, blockquotes, fenced code blocks, unordered/ordered lists, horizontal rules, paragraph wrapping |
+| `test_emoji.md` | Emoji in headings and body text, tables with inline format (`**bold**`), mixed emoji + markdown |
+| `test_table.md` | Basic table with Unicode box-drawing borders, no inline formatting in cells |
+| `test_table2.md` | Table alignment (left/center/right), inline bold/italic/code/links in cells, minimal table without outer pipes |
+| `test_user.md` | Single standalone table with backtick-wrapped code in cells, long cell text wrapping across multiple visual lines |
+| `test_utf8.md` | Spanish accented characters (áéíóúñü), mixed with bold/italic/inline code/blockquote/fenced bash block, links with accents in URL, escaped heading |
+| `test_wide.md` | Table with very long cell content forcing multi-line wrapping per row, CJK/wide characters |
 
 ## Architecture
 
