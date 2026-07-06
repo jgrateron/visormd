@@ -37,6 +37,8 @@ static const Theme themes[] = {
             [CP_LINK]         = { COLOR_BLUE,    -1 },
             [CP_HR]           = { COLOR_WHITE,   -1 },
             [CP_STATUSBAR]    = { COLOR_BLACK,   COLOR_WHITE },
+            [CP_TABLE_BORDER] = { COLOR_WHITE,   -1 },
+            [CP_TABLE_HEADER] = { COLOR_WHITE,   -1 },
         },
     },
 
@@ -61,6 +63,8 @@ static const Theme themes[] = {
             [CP_LINK]         = { COLOR_WHITE,   -1 },
             [CP_HR]           = { COLOR_WHITE,   -1 },
             [CP_STATUSBAR]    = { COLOR_BLACK,   COLOR_WHITE },
+            [CP_TABLE_BORDER] = { COLOR_WHITE,   -1 },
+            [CP_TABLE_HEADER] = { COLOR_WHITE,   -1 },
         },
     },
 
@@ -85,6 +89,8 @@ static const Theme themes[] = {
             [CP_LINK]         = { COLOR_BLUE,    -1 },
             [CP_HR]           = { COLOR_WHITE,   -1 },
             [CP_STATUSBAR]    = { COLOR_BLACK,   COLOR_CYAN },
+            [CP_TABLE_BORDER] = { COLOR_WHITE,   -1 },
+            [CP_TABLE_HEADER] = { COLOR_YELLOW,  -1 },
         },
     },
 
@@ -109,6 +115,8 @@ static const Theme themes[] = {
             [CP_LINK]         = { COLOR_BLUE,    -1 },
             [CP_HR]           = { COLOR_BLACK,   -1 },
             [CP_STATUSBAR]    = { COLOR_WHITE,   COLOR_BLUE },
+            [CP_TABLE_BORDER] = { COLOR_BLACK,   -1 },
+            [CP_TABLE_HEADER] = { COLOR_BLACK,   -1 },
         },
     },
 
@@ -133,6 +141,8 @@ static const Theme themes[] = {
             [CP_LINK]         = { COLOR_BLUE,    -1 },
             [CP_HR]           = { COLOR_WHITE,   -1 },
             [CP_STATUSBAR]    = { COLOR_BLACK,   COLOR_CYAN },
+            [CP_TABLE_BORDER] = { COLOR_WHITE,   -1 },
+            [CP_TABLE_HEADER] = { COLOR_CYAN,    -1 },
         },
     },
 
@@ -157,6 +167,8 @@ static const Theme themes[] = {
             [CP_LINK]         = { COLOR_BLUE,    -1 },
             [CP_HR]           = { COLOR_WHITE,   -1 },
             [CP_STATUSBAR]    = { COLOR_BLACK,   COLOR_YELLOW },
+            [CP_TABLE_BORDER] = { COLOR_WHITE,   -1 },
+            [CP_TABLE_HEADER] = { COLOR_YELLOW,  -1 },
         },
     },
 
@@ -181,6 +193,8 @@ static const Theme themes[] = {
             [CP_LINK]         = { COLOR_CYAN,    -1 },
             [CP_HR]           = { COLOR_WHITE,   -1 },
             [CP_STATUSBAR]    = { COLOR_BLACK,   COLOR_MAGENTA },
+            [CP_TABLE_BORDER] = { COLOR_WHITE,   -1 },
+            [CP_TABLE_HEADER] = { COLOR_CYAN,    -1 },
         },
     },
 
@@ -205,6 +219,8 @@ static const Theme themes[] = {
             [CP_LINK]         = { COLOR_BLUE,    -1 },
             [CP_HR]           = { COLOR_WHITE,   -1 },
             [CP_STATUSBAR]    = { COLOR_BLACK,   COLOR_CYAN },
+            [CP_TABLE_BORDER] = { COLOR_WHITE,   -1 },
+            [CP_TABLE_HEADER] = { COLOR_CYAN,    -1 },
         },
     },
 };

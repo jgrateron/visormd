@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <wchar.h>
 
 /* ──────────────────────────────────────────────
  * buffer de caracteres dinámico (para acumular
@@ -273,6 +274,354 @@ static int extract_list_marker(const char *raw, LineType type,
 }
 
 /* ──────────────────────────────────────────────
+ * helpers de tablas (pipe tables)
+ * ────────────────────────────────────────────── */
+
+/* forward declaration */
+static void doc_add_line(Document *doc, ParsedLine *line);
+static int  parse_table_block(Document *doc, char **raw_lines,
+                               int start, int end);
+
+/* ¿la línea es parte de una tabla pipe? */
+static int is_table_line(const char *line) {
+    const char *p = line;
+    while (*p == ' ') p++;
+
+    if (!strchr(p, '|')) return 0;
+
+    /* ¿es una fila separadora? (solo | - : espacios) */
+    int only_sep = 1;
+    for (const char *c = p; *c; c++) {
+        if (*c != '|' && *c != '-' && *c != ':' && *c != ' ') {
+            only_sep = 0;
+            break;
+        }
+    }
+    if (only_sep) return 1;
+
+    /* fila normal: debe empezar con | */
+    return (*p == '|');
+}
+
+/* ancho visual de un string UTF-8 (en columnas de terminal) */
+static int str_visual_width(const char *utf8) {
+    int width = 0;
+    mbstate_t state = {0};
+    size_t rem = strlen(utf8);
+    const char *p = utf8;
+
+    while (rem > 0) {
+        wchar_t wc;
+        size_t n = mbrtowc(&wc, p, rem, &state);
+        if (n == 0) break;
+        if (n == (size_t)-1 || n == (size_t)-2) {
+            width++;
+            p++; rem--;
+            memset(&state, 0, sizeof(state));
+            continue;
+        }
+        int cw = wcwidth(wc);
+        width += (cw < 0) ? 1 : cw;
+        p   += n;
+        rem -= n;
+    }
+    return width;
+}
+
+/* dividir una línea de tabla en celdas (sin los pipes) */
+static int split_table_cells(const char *raw, char ***out_cells) {
+    const char *p = raw;
+    while (*p == ' ') p++;
+    if (*p == '|') p++;
+
+    /* contar pipes restantes para estimar */
+    int pipes = 0;
+    for (const char *q = p; *q; q++) if (*q == '|') pipes++;
+
+    int max_cells = pipes + 1;
+    char **cells = malloc(sizeof(char *) * (size_t)max_cells);
+    if (!cells) return 0;
+    int n = 0;
+
+    while (*p) {
+        const char *start = p;
+        while (*p && *p != '|') p++;
+        const char *end = p;
+
+        /* trim izquierdo */
+        while (start < end && (*start == ' ' || *start == '\t')) start++;
+        /* trim derecho */
+        while (end > start && (end[-1] == ' ' || end[-1] == '\t')) end--;
+
+        cells[n++] = strndup(start, (size_t)(end - start));
+
+        if (*p == '|') p++;
+    }
+
+    /* eliminar celdas vacías sobrantes del final */
+    while (n > 0 && cells[n - 1][0] == '\0') {
+        free(cells[n - 1]);
+        n--;
+    }
+
+    *out_cells = cells;
+    return n;
+}
+
+/* ¿es una celda separadora?  ej: ---  :---  :---:  ---: */
+static int is_separator_cell(const char *cell) {
+    if (!cell || !*cell) return 0;
+    const char *p = cell;
+    while (*p == ' ') p++;
+    if (*p == ':') p++;
+    int dashes = 0;
+    while (*p == '-') { dashes++; p++; }
+    if (dashes < 3) return 0;
+    if (*p == ':') p++;
+    while (*p == ' ') p++;
+    return *p == '\0';
+}
+
+/* alineación desde celda separadora: -1=izq, 0=centro, 1=der */
+static int cell_alignment(const char *cell) {
+    if (!cell || !*cell) return -1;
+    const char *p = cell;
+    while (*p == ' ') p++;
+    int left = 0, right = 0;
+    if (*p == ':') { left = 1; p++; }
+    while (*p == '-') p++;
+    if (*p == ':') { right = 1; p++; }
+    if (left && right) return  0;
+    if (right)         return  1;
+    return -1;
+}
+
+/* ──────────────────────────────────────────────
+ * construir línea de borde box-drawing
+ * style: 0=top(┌┬┐), 1=mid(├┼┤), 2=bottom(└┴┘)
+ * ────────────────────────────────────────────── */
+static char *build_border(int ncols, int *widths, int style) {
+    const char *left, *mid, *right, *fill;
+    fill  = "─";
+    if (style == 0)      { left = "┌"; mid = "┬"; right = "┐"; }
+    else if (style == 1) { left = "├"; mid = "┼"; right = "┤"; }
+    else                 { left = "└"; mid = "┴"; right = "┘"; }
+
+    size_t fl = strlen(fill), ll = strlen(left), ml = strlen(mid), rl = strlen(right);
+    size_t total = ll + rl + 1; /* esquinas + \0 */
+    for (int c = 0; c < ncols; c++) {
+        total += (size_t)widths[c] * fl;
+        if (c > 0) total += ml;
+    }
+
+    char *buf = malloc(total);
+    if (!buf) return NULL;
+
+    char *p = buf;
+    memcpy(p, left, ll); p += ll;
+    for (int c = 0; c < ncols; c++) {
+        if (c > 0) { memcpy(p, mid, ml); p += ml; }
+        for (int i = 0; i < widths[c]; i++) {
+            memcpy(p, fill, fl); p += fl;
+        }
+    }
+    memcpy(p, right, rl); p += rl;
+    *p = '\0';
+
+    return buf;
+}
+
+/* procesar un bloque contiguo de filas de tabla
+ * retorna cantidad de líneas consumidas, 0 si no era tabla válida */
+static int parse_table_block(Document *doc, char **raw_lines,
+                               int start, int end) {
+    int row_count = end - start;
+    if (row_count < 2) return 0;  /* mínimo: encabezado + separador */
+
+    int success = 0;
+
+    /* ── fase 1: dividir todas las filas en celdas ── */
+    char ***rows    = NULL;
+    int   *cell_cnt = NULL;
+    int   *widths   = NULL;
+    int   *aligns   = NULL;
+    ParsedLine *cell_parsed = NULL;
+
+    rows    = malloc(sizeof(char **) * (size_t)row_count);
+    cell_cnt = malloc(sizeof(int)    * (size_t)row_count);
+    if (!rows || !cell_cnt) goto cleanup;
+
+    for (int r = 0; r < row_count; r++) {
+        cell_cnt[r] = split_table_cells(raw_lines[start + r], &rows[r]);
+    }
+
+    int ncols = cell_cnt[0];
+    if (ncols < 1) goto cleanup;
+
+    /* ── fase 2: encontrar fila separadora ── */
+    int sep_row = -1;
+    for (int r = 0; r < row_count; r++) {
+        if (cell_cnt[r] < 1) continue;
+        int all_sep = 1;
+        for (int c = 0; c < cell_cnt[r]; c++) {
+            if (!is_separator_cell(rows[r][c])) { all_sep = 0; break; }
+        }
+        if (all_sep) { sep_row = r; break; }
+    }
+    if (sep_row < 0) goto cleanup;
+
+    /* ── fase 3: parsear alineación ── */
+    aligns = malloc(sizeof(int) * (size_t)ncols);
+    if (!aligns) goto cleanup;
+    for (int c = 0; c < ncols && c < cell_cnt[sep_row]; c++) {
+        aligns[c] = cell_alignment(rows[sep_row][c]);
+    }
+    /* rellenar columnas extra si las hay */
+    for (int c = cell_cnt[sep_row]; c < ncols; c++) {
+        aligns[c] = -1;
+    }
+
+    /* ── fase 4: parseo inline por celda ── */
+    cell_parsed = calloc((size_t)(row_count * ncols), sizeof(ParsedLine));
+    if (!cell_parsed) goto cleanup;
+
+    for (int r = 0; r < row_count; r++) {
+        if (r == sep_row) continue;
+        for (int c = 0; c < ncols && c < cell_cnt[r]; c++) {
+            ParsedLine *cl = &cell_parsed[r * ncols + c];
+            parse_inline(cl, rows[r][c]);
+        }
+    }
+
+    /* ── fase 5: calcular anchos máximos por columna ── */
+    widths = malloc(sizeof(int) * (size_t)ncols);
+    if (!widths) goto cleanup;
+    for (int c = 0; c < ncols; c++) {
+        widths[c] = 3;  /* ancho mínimo */
+        for (int r = 0; r < row_count; r++) {
+            if (r == sep_row) continue;
+            ParsedLine *cl = &cell_parsed[r * ncols + c];
+            int w = 0;
+            for (int s = 0; s < cl->span_count; s++) {
+                w += str_visual_width(cl->spans[s].text);
+            }
+            if (w > widths[c]) widths[c] = w;
+        }
+    }
+
+    /* ── fase 6: emitir ParsedLines con bordes box-drawing ── */
+    /* helper local */
+    #define ADD_BORDER(sty, ltype) do { \
+        ParsedLine bl; \
+        memset(&bl, 0, sizeof(bl)); \
+        bl.type = (ltype); \
+        bl.table_cols = ncols; \
+        bl.table_widths = malloc(sizeof(int) * (size_t)ncols); \
+        bl.table_aligns = malloc(sizeof(int) * (size_t)ncols); \
+        if (bl.table_widths && bl.table_aligns) { \
+            memcpy(bl.table_widths, widths, sizeof(int) * (size_t)ncols); \
+            memcpy(bl.table_aligns, aligns, sizeof(int) * (size_t)ncols); \
+            char *btext = build_border(ncols, widths, (sty)); \
+            if (btext) { add_span(&bl, btext, SPAN_NORMAL, NULL); free(btext); } \
+            doc_add_line(doc, &bl); \
+        } else { \
+            free(bl.table_widths); free(bl.table_aligns); \
+        } \
+    } while(0)
+
+    #define ADD_ROW(ridx, ltype, center) do { \
+        ParsedLine rl; \
+        memset(&rl, 0, sizeof(rl)); \
+        rl.type = (ltype); \
+        rl.table_cols = ncols; \
+        rl.table_widths = malloc(sizeof(int) * (size_t)ncols); \
+        rl.table_aligns = malloc(sizeof(int) * (size_t)ncols); \
+        if (rl.table_widths && rl.table_aligns) { \
+            memcpy(rl.table_widths, widths, sizeof(int) * (size_t)ncols); \
+            for (int _c = 0; _c < ncols; _c++) \
+                rl.table_aligns[_c] = (center) ? 0 : aligns[_c]; \
+            for (int _c = 0; _c < ncols; _c++) { \
+                add_span(&rl, "│", SPAN_TABLE_PIPE, NULL); \
+                if (_c < cell_cnt[(ridx)]) { \
+                    ParsedLine *cl = &cell_parsed[(ridx) * ncols + _c]; \
+                    for (int _s = 0; _s < cl->span_count; _s++) { \
+                        Span *sp = &cl->spans[_s]; \
+                        add_span(&rl, sp->text, sp->type, sp->url); \
+                    } \
+                } \
+            } \
+            add_span(&rl, "│", SPAN_TABLE_PIPE, NULL); \
+            doc_add_line(doc, &rl); \
+        } else { \
+            free(rl.table_widths); free(rl.table_aligns); \
+        } \
+    } while(0)
+
+    ADD_BORDER(0, LINE_TABLE_TOP);   /* ┌──┬──┐ */
+
+    for (int r = 0; r < row_count; r++) {
+        if (r == sep_row) continue;
+        int is_header = (sep_row < 0) ? (r == 0) : (r < sep_row);
+        if (is_header)
+            ADD_ROW(r, LINE_TABLE_HEADER, 1);  /* centrado */
+    }
+
+    ADD_BORDER(1, LINE_TABLE_HSEP);  /* ├──┼──┤ */
+
+    for (int r = 0; r < row_count; r++) {
+        if (r == sep_row) continue;
+        int is_header = (sep_row < 0) ? (r == 0) : (r < sep_row);
+        if (is_header) continue;
+        /* ¿es el último dato? */
+        int is_last = 1;
+        for (int r2 = r + 1; r2 < row_count; r2++) {
+            if (r2 == sep_row) continue;
+            int h2 = (sep_row < 0) ? (r2 == 0) : (r2 < sep_row);
+            if (!h2) { is_last = 0; break; }
+        }
+        ADD_ROW(r, LINE_TABLE_ROW, 0);  /* alineación markdown */
+        if (is_last)
+            ADD_BORDER(2, LINE_TABLE_BOTTOM);  /* └──┴──┘ */
+        else
+            ADD_BORDER(1, LINE_TABLE_RSEP);    /* ├──┼──┤ */
+    }
+
+    #undef ADD_BORDER
+    #undef ADD_ROW
+
+    success = 1;
+
+cleanup:
+    /* liberar recursos temporales */
+    free(widths);
+    free(aligns);
+
+    if (cell_parsed) {
+        for (int i = 0; i < row_count * ncols; i++) {
+            ParsedLine *cl = &cell_parsed[i];
+            for (int s = 0; s < cl->span_count; s++) {
+                free(cl->spans[s].text);
+                free(cl->spans[s].url);
+            }
+            free(cl->spans);
+        }
+        free(cell_parsed);
+    }
+
+    if (rows) {
+        for (int r = 0; r < row_count; r++) {
+            if (rows[r]) {
+                for (int c = 0; c < cell_cnt[r]; c++) free(rows[r][c]);
+                free(rows[r]);
+            }
+        }
+        free(rows);
+    }
+    free(cell_cnt);
+    return success ? row_count : 0;
+}
+
+/* ──────────────────────────────────────────────
  * API pública
  * ────────────────────────────────────────────── */
 
@@ -294,6 +643,8 @@ void doc_free(Document *doc) {
             free(line->spans[j].url);
         }
         free(line->spans);
+        free(line->table_widths);
+        free(line->table_aligns);
     }
     free(doc->lines);
     free(doc);
@@ -313,6 +664,19 @@ int doc_parse(Document *doc, char **raw_lines, int raw_count) {
 
     for (int i = 0; i < raw_count; i++) {
         ParsedLine line = {0};
+
+        /* ── bloque de tabla (pipe table) ── */
+        if (!in_code_block && is_table_line(raw_lines[i])) {
+            int start = i;
+            while (i < raw_count && is_table_line(raw_lines[i])) i++;
+            int consumed = parse_table_block(doc, raw_lines, start, i);
+            if (consumed > 0) {
+                i--;  /* el bucle incrementa, compensar */
+                continue;
+            }
+            /* no era tabla válida, reintentar desde start como línea normal */
+            i = start;
+        }
 
         /* ── detección de cerca de código ── */
         if (is_code_fence(raw_lines[i])) {

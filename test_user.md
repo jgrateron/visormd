@@ -1,0 +1,10 @@
+| Característica | Bug que elimina |
+|---|---|
+| `record` | Inconsistencias en `equals`/`hashCode` |
+| `sealed class` | Casos de negocio no manejados |
+| Genéricos con estado | Flujos de trabajo inválidos |
+| Inmutabilidad | Mutaciones inesperadas de estado compartido |
+| `Optional` | Suposiciones de que un valor siempre existe |
+| Typed IDs | Confusión entre identificadores del mismo tipo base |
+| Switch exhaustivo | Ramas de lógica olvidadas al evolucionar |
+| Lambdas / Functional Interfaces | Bugs introducidos por código repetitivo excesivo |

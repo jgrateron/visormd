@@ -15,6 +15,13 @@ typedef enum {
     LINE_LIST_UNORDERED,
     LINE_LIST_ORDERED,
     LINE_HORIZONTAL_RULE,
+    LINE_TABLE_HEADER,
+    LINE_TABLE_ROW,
+    LINE_TABLE_SEP,
+    LINE_TABLE_TOP,
+    LINE_TABLE_HSEP,
+    LINE_TABLE_RSEP,
+    LINE_TABLE_BOTTOM,
     LINE_EMPTY,
 } LineType;
 
@@ -28,6 +35,7 @@ typedef enum {
     SPAN_LINK_TEXT,
     SPAN_LINK_URL,
     SPAN_LIST_MARKER,
+    SPAN_TABLE_PIPE,
 } SpanType;
 
 /* ── un fragmento de texto con un estilo uniforme ── */
@@ -43,7 +51,10 @@ typedef struct {
     int      span_count;
     int      span_capacity;
     LineType type;
-    int      indent; /* nivel de indentación (0..n) */
+    int      indent;      /* nivel de indentación (0..n) */
+    int      table_cols;  /* número de columnas (0 = no es tabla) */
+    int     *table_widths; /* array[table_cols] ancho máximo por columna */
+    int     *table_aligns; /* array[table_cols]: -1=izq, 0=centro, 1=der */
 } ParsedLine;
 
 /* ── documento completo parseado ── */

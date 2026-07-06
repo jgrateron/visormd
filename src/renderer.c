@@ -82,20 +82,32 @@ static chtype span_attr(SpanType st, LineType lt) {
     int    cp = CP_DEFAULT;
     chtype at = 0;
 
+    /* SPAN_TABLE_PIPE siempre usa color de borde */
+    if (st == SPAN_TABLE_PIPE) {
+        return COLOR_PAIR(CP_TABLE_BORDER);
+    }
+
     /* SPAN_NORMAL hereda el color del tipo de línea */
     if (st == SPAN_NORMAL || st == SPAN_LIST_MARKER) {
         if (st == SPAN_LIST_MARKER) { cp = CP_LIST_MARKER; }
         else {
             switch (lt) {
-            case LINE_HEADING_1: cp = CP_HEADING_1; at = A_BOLD;   break;
-            case LINE_HEADING_2: cp = CP_HEADING_2; at = A_BOLD;   break;
-            case LINE_HEADING_3: cp = CP_HEADING_3; at = A_BOLD;   break;
-            case LINE_HEADING_4: cp = CP_HEADING_4;                break;
-            case LINE_HEADING_5: cp = CP_HEADING_5;                break;
-            case LINE_HEADING_6: cp = CP_HEADING_6;                break;
-            case LINE_CODE_BLOCK:cp = CP_CODE_BLOCK;               break;
-            case LINE_BLOCKQUOTE:cp = CP_BLOCKQUOTE;               break;
-            default:             cp = CP_DEFAULT;                  break;
+            case LINE_HEADING_1:     cp = CP_HEADING_1;  at = A_BOLD;   break;
+            case LINE_HEADING_2:     cp = CP_HEADING_2;  at = A_BOLD;   break;
+            case LINE_HEADING_3:     cp = CP_HEADING_3;  at = A_BOLD;   break;
+            case LINE_HEADING_4:     cp = CP_HEADING_4;                 break;
+            case LINE_HEADING_5:     cp = CP_HEADING_5;                 break;
+            case LINE_HEADING_6:     cp = CP_HEADING_6;                 break;
+            case LINE_CODE_BLOCK:    cp = CP_CODE_BLOCK;                break;
+            case LINE_BLOCKQUOTE:    cp = CP_BLOCKQUOTE;                break;
+            case LINE_TABLE_HEADER:  cp = CP_TABLE_HEADER; at = A_BOLD; break;
+            case LINE_TABLE_ROW:     cp = CP_DEFAULT;                   break;
+            case LINE_TABLE_SEP:     cp = CP_TABLE_BORDER;              break;
+            case LINE_TABLE_TOP:     cp = CP_TABLE_BORDER;              break;
+            case LINE_TABLE_HSEP:    cp = CP_TABLE_BORDER;              break;
+            case LINE_TABLE_RSEP:    cp = CP_TABLE_BORDER;              break;
+            case LINE_TABLE_BOTTOM:  cp = CP_TABLE_BORDER;              break;
+            default:                 cp = CP_DEFAULT;                   break;
             }
         }
     } else {
@@ -118,6 +130,17 @@ static chtype span_attr(SpanType st, LineType lt) {
  * ────────────────────────────────────────────── */
 static int line_wrapped_rows(ParsedLine *line, int avail_w) {
     if (line->type == LINE_EMPTY) return 1;
+
+    /* las filas de tabla ocupan 1 línea visual (sin wrapping) */
+    if (line->type == LINE_TABLE_HEADER ||
+        line->type == LINE_TABLE_ROW   ||
+        line->type == LINE_TABLE_SEP   ||
+        line->type == LINE_TABLE_TOP   ||
+        line->type == LINE_TABLE_HSEP  ||
+        line->type == LINE_TABLE_RSEP  ||
+        line->type == LINE_TABLE_BOTTOM)
+        return 1;
+
     int col = 0, rows = 1;
     wchar_t wbuf[8192];
     for (int i = 0; i < line->span_count; i++) {
@@ -175,6 +198,264 @@ static int render_source_line(Renderer *r, int line_idx,
             wmove(r->main_win, screen_y, margin);
             for (int x = 0; x < avail_w; x++)
                 waddch(r->main_win, ACS_HLINE | COLOR_PAIR(CP_HR) | A_DIM);
+        }
+        return 1;
+    }
+
+    /* ── bordes de tabla (generados con anchos ajustados) ── */
+    if (line->type == LINE_TABLE_TOP   ||
+        line->type == LINE_TABLE_HSEP  ||
+        line->type == LINE_TABLE_RSEP  ||
+        line->type == LINE_TABLE_BOTTOM) {
+
+        if (skip_rows > 0) return 1;
+        if (screen_y < 0 || screen_y >= r->content_h) return 1;
+
+        int ncols = line->table_cols;
+        if (ncols <= 0 || !line->table_widths) return 1;
+
+        /* calcular anchos ajustados (misma lógica que filas de datos) */
+        int pipes_w = ncols + 1;
+        int cell_avail = avail_w - pipes_w;
+        if (cell_avail < ncols * 3) cell_avail = ncols * 3;
+
+        int total_req = 0;
+        for (int c = 0; c < ncols; c++) total_req += line->table_widths[c];
+
+        int *adj_w = malloc(sizeof(int) * (size_t)ncols);
+        if (!adj_w) return 1;
+
+        if (total_req > cell_avail) {
+            int alloc = 0;
+            for (int c = 0; c < ncols; c++) {
+                adj_w[c] = line->table_widths[c] * cell_avail / total_req;
+                if (adj_w[c] < 3) adj_w[c] = 3;
+                alloc += adj_w[c];
+            }
+            int rem = cell_avail - alloc;
+            for (int c = 0; c < ncols && rem > 0; c++) { adj_w[c]++; rem--; }
+        } else {
+            for (int c = 0; c < ncols; c++) adj_w[c] = line->table_widths[c];
+        }
+
+        /* elegir caracteres según tipo de borde */
+        const char *left, *mid, *right;
+        if (line->type == LINE_TABLE_TOP) {
+            left = "┌"; mid = "┬"; right = "┐";
+        } else if (line->type == LINE_TABLE_BOTTOM) {
+            left = "└"; mid = "┴"; right = "┘";
+        } else {
+            left = "├"; mid = "┼"; right = "┤";
+        }
+
+        /* convertir caracteres box-drawing a wide chars */
+        wchar_t w_left[4], w_mid[4], w_right[4], w_h[4];
+        int wl_l = utf8_to_wide(left,  (int)strlen(left),  w_left,  4);
+        int wl_m = utf8_to_wide(mid,   (int)strlen(mid),   w_mid,   4);
+        int wl_r = utf8_to_wide(right, (int)strlen(right), w_right, 4);
+        int wl_h = utf8_to_wide("─",   3,                  w_h,     4);
+
+        chtype attr = COLOR_PAIR(CP_TABLE_BORDER);
+        int sx = margin;
+
+        /* borde izquierdo */
+        if (wl_l > 0 && sx < r->term_w) {
+            wmove(r->main_win, screen_y, sx);
+            wattron(r->main_win, attr);
+            waddnwstr(r->main_win, w_left, 1);
+            wattroff(r->main_win, attr);
+            sx += wcwidth(w_left[0]);
+        }
+
+        for (int c = 0; c < ncols; c++) {
+            /* relleno horizontal */
+            for (int i = 0; i < adj_w[c] && sx < r->term_w; i++) {
+                if (wl_h > 0) {
+                    wmove(r->main_win, screen_y, sx);
+                    wattron(r->main_win, attr);
+                    waddnwstr(r->main_win, w_h, 1);
+                    wattroff(r->main_win, attr);
+                    sx += wcwidth(w_h[0]);
+                }
+            }
+            /* conector (mid o right para el último) */
+            if (c < ncols - 1 && wl_m > 0 && sx < r->term_w) {
+                wmove(r->main_win, screen_y, sx);
+                wattron(r->main_win, attr);
+                waddnwstr(r->main_win, w_mid, 1);
+                wattroff(r->main_win, attr);
+                sx += wcwidth(w_mid[0]);
+            }
+        }
+
+        /* borde derecho */
+        if (wl_r > 0 && sx < r->term_w) {
+            wmove(r->main_win, screen_y, sx);
+            wattron(r->main_win, attr);
+            waddnwstr(r->main_win, w_right, 1);
+            wattroff(r->main_win, attr);
+            sx += wcwidth(w_right[0]);
+        }
+
+        free(adj_w);
+
+        /* limpiar resto */
+        if (sx < r->term_w) {
+            wmove(r->main_win, screen_y, sx);
+            wclrtoeol(r->main_win);
+        }
+        return 1;
+    }
+
+    /* ── tabla ── */
+    if (line->type == LINE_TABLE_HEADER ||
+        line->type == LINE_TABLE_ROW   ||
+        line->type == LINE_TABLE_SEP) {
+
+        if (skip_rows > 0) return 1;
+        if (screen_y < 0 || screen_y >= r->content_h) return 1;
+
+        int ncols = line->table_cols;
+        if (ncols <= 0 || !line->table_widths || !line->table_aligns)
+            return 1;
+
+        /* ── ajustar anchos al espacio disponible ── */
+        int pipes_w = ncols + 1;  /* │ por columna + borde inicial */
+        int cell_avail = avail_w - pipes_w;
+        if (cell_avail < ncols * 3) cell_avail = ncols * 3;
+
+        int total_req = 0;
+        for (int c = 0; c < ncols; c++) total_req += line->table_widths[c];
+
+        int *adj_w = malloc(sizeof(int) * (size_t)ncols);
+        if (!adj_w) return 1;
+
+        if (total_req > cell_avail) {
+            /* reducir proporcionalmente */
+            int alloc = 0;
+            for (int c = 0; c < ncols; c++) {
+                adj_w[c] = line->table_widths[c] * cell_avail / total_req;
+                if (adj_w[c] < 3) adj_w[c] = 3;
+                alloc += adj_w[c];
+            }
+            int rem = cell_avail - alloc;
+            for (int c = 0; c < ncols && rem > 0; c++) {
+                adj_w[c]++; rem--;
+            }
+        } else {
+            for (int c = 0; c < ncols; c++) adj_w[c] = line->table_widths[c];
+        }
+
+        /* ── fase 1: medir ancho visual de cada celda (topado a adj_w) ── */
+        int *cell_w = calloc((size_t)ncols, sizeof(int));
+        if (!cell_w) { free(adj_w); return 1; }
+
+        int ci = -1;
+        wchar_t wbuf[16384];
+
+        for (int s = 0; s < line->span_count; s++) {
+            Span *sp = &line->spans[s];
+            if (sp->type == SPAN_TABLE_PIPE) { ci++; continue; }
+            if (ci >= 0 && ci < ncols) {
+                int wl = utf8_to_wide(sp->text, (int)strlen(sp->text),
+                                      wbuf, 16384);
+                for (int j = 0; j < wl; j++) {
+                    int cw = wcwidth(wbuf[j]);
+                    if (cw < 0) cw = 1;
+                    cell_w[ci] += cw;
+                }
+            }
+        }
+
+        /* ── fase 2: dibujar celdas con alineación ── */
+        int sx = margin;
+        ci     = -1;
+        int truncated = 0;
+
+        for (int s = 0; s < line->span_count; s++) {
+            Span *sp = &line->spans[s];
+
+            if (sp->type == SPAN_TABLE_PIPE) {
+                /* padding derecho de la celda que termina */
+                if (ci >= 0 && ci < ncols && !truncated) {
+                    int cw = cell_w[ci] < adj_w[ci] ? cell_w[ci] : adj_w[ci];
+                    int pad = adj_w[ci] - cw;
+                    if (pad < 0) pad = 0;
+                    int pr = 0;
+                    if (line->table_aligns[ci] == -1)      pr = pad;
+                    else if (line->table_aligns[ci] == 0)  pr = pad - pad / 2;
+                    for (int p = 0; p < pr && sx < r->term_w; p++) {
+                        wmove(r->main_win, screen_y, sx++);
+                        waddch(r->main_win, ' ');
+                    }
+                }
+
+                /* dibujar el pipe */
+                if (sx < r->term_w) {
+                    wmove(r->main_win, screen_y, sx++);
+                    wattron(r->main_win, COLOR_PAIR(CP_TABLE_BORDER));
+                    waddch(r->main_win, ACS_VLINE);
+                    wattroff(r->main_win, COLOR_PAIR(CP_TABLE_BORDER));
+                }
+
+                ci++;
+                truncated = 0;
+
+                /* padding izquierdo de la celda nueva */
+                if (ci >= 0 && ci < ncols) {
+                    int cw = cell_w[ci] < adj_w[ci] ? cell_w[ci] : adj_w[ci];
+                    int pad = adj_w[ci] - cw;
+                    if (pad < 0) pad = 0;
+                    int pl = 0;
+                    if (line->table_aligns[ci] == 1)       pl = pad;
+                    else if (line->table_aligns[ci] == 0)  pl = pad / 2;
+                    for (int p = 0; p < pl && sx < r->term_w; p++) {
+                        wmove(r->main_win, screen_y, sx++);
+                        waddch(r->main_win, ' ');
+                    }
+                }
+                continue;
+            }
+
+            /* dibujar contenido de la celda (truncar si excede adj_w) */
+            if (ci >= 0 && ci < ncols && !truncated) {
+                chtype attr = span_attr(sp->type, line->type);
+                int wl = utf8_to_wide(sp->text, (int)strlen(sp->text),
+                                      wbuf, 16384);
+                int drawn = 0;
+                for (int j = 0; j < wl && sx < r->term_w; j++) {
+                    int cw = wcwidth(wbuf[j]);
+                    if (cw < 0) cw = 1;
+                    if (drawn + cw > adj_w[ci]) {
+                        /* truncar: "…" para celdas, nada para separador */
+                        if (line->type != LINE_TABLE_SEP) {
+                            static const wchar_t ellipsis[] = L"…";
+                            wmove(r->main_win, screen_y, sx);
+                            wattron(r->main_win, attr);
+                            waddnwstr(r->main_win, ellipsis, 1);
+                            wattroff(r->main_win, attr);
+                            sx++;
+                        }
+                        truncated = 1;
+                        break;
+                    }
+                    wmove(r->main_win, screen_y, sx);
+                    wattron(r->main_win, attr);
+                    waddnwstr(r->main_win, wbuf + j, 1);
+                    wattroff(r->main_win, attr);
+                    sx += cw;
+                    drawn += cw;
+                }
+            }
+        }
+
+        free(cell_w);
+        free(adj_w);
+
+        /* limpiar resto de la línea */
+        if (sx < r->term_w) {
+            wmove(r->main_win, screen_y, sx);
+            wclrtoeol(r->main_win);
         }
         return 1;
     }

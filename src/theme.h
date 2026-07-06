@@ -19,10 +19,12 @@
 #define CP_LIST_MARKER 13
 #define CP_LINK        14
 #define CP_HR          15
-#define CP_STATUSBAR   16
+#define CP_STATUSBAR     16
+#define CP_TABLE_BORDER  17
+#define CP_TABLE_HEADER  18
 
 #define CP_FIRST  1
-#define CP_COUNT 17   /* índices 1..16, posición 0 sin usar */
+#define CP_COUNT  19   /* índices 1..18, posición 0 sin usar */
 
 /* ── un par foreground / background ── */
 typedef struct {
