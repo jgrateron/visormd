@@ -22,6 +22,7 @@ typedef enum {
     LINE_TABLE_HSEP,
     LINE_TABLE_RSEP,
     LINE_TABLE_BOTTOM,
+    LINE_HIGHLIGHT,
     LINE_EMPTY,
 } LineType;
 

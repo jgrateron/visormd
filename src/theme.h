@@ -22,9 +22,10 @@
 #define CP_STATUSBAR     16
 #define CP_TABLE_BORDER  17
 #define CP_TABLE_HEADER  18
+#define CP_HIGHLIGHT     19
 
 #define CP_FIRST  1
-#define CP_COUNT  19   /* índices 1..18, posición 0 sin usar */
+#define CP_COUNT  20   /* índices 1..19, posición 0 sin usar */
 
 /* ── un par foreground / background ── */
 typedef struct {

@@ -248,6 +248,17 @@ static int is_code_fence(const char *line) {
            (line[0] == '~' && line[1] == '~' && line[2] == '~');
 }
 
+/* ¿es una cerca de código sin especificador de lenguaje? */
+static int is_bare_fence(const char *line) {
+    while (*line == ' ') line++;
+    if (!((line[0] == '`' && line[1] == '`' && line[2] == '`') ||
+          (line[0] == '~' && line[1] == '~' && line[2] == '~')))
+        return 0;
+    line += 3;
+    while (*line == ' ' || *line == '\t') line++;
+    return (*line == '\0');
+}
+
 /* ──────────────────────────────────────────────
  * extrae el marcador de una lista
  * ej: "- Tarea" → marcador="- ", resto="Tarea"
@@ -661,12 +672,13 @@ static void doc_add_line(Document *doc, ParsedLine *line) {
 
 int doc_parse(Document *doc, char **raw_lines, int raw_count) {
     int in_code_block = 0;
+    int in_highlight  = 0;
 
     for (int i = 0; i < raw_count; i++) {
         ParsedLine line = {0};
 
         /* ── bloque de tabla (pipe table) ── */
-        if (!in_code_block && is_table_line(raw_lines[i])) {
+        if (!in_code_block && !in_highlight && is_table_line(raw_lines[i])) {
             int start = i;
             while (i < raw_count && is_table_line(raw_lines[i])) i++;
             int consumed = parse_table_block(doc, raw_lines, start, i);
@@ -680,9 +692,36 @@ int doc_parse(Document *doc, char **raw_lines, int raw_count) {
 
         /* ── detección de cerca de código ── */
         if (is_code_fence(raw_lines[i])) {
-            in_code_block = !in_code_block;
-            line.type  = LINE_CODE_BLOCK;
-            add_span(&line, raw_lines[i], SPAN_NORMAL, NULL);
+            int bare = is_bare_fence(raw_lines[i]);
+
+            if (in_code_block) {
+                /* cualquier cerca cierra un bloque de código */
+                in_code_block = 0;
+                line.type  = LINE_CODE_BLOCK;
+                add_span(&line, raw_lines[i], SPAN_NORMAL, NULL);
+                doc_add_line(doc, &line);
+            } else if (in_highlight) {
+                /* cualquier cerca cierra un bloque resaltado */
+                in_highlight = 0;
+                /* no se emite la cerca de cierre */
+            } else if (bare) {
+                /* cerca sin lenguaje: abre bloque resaltado */
+                in_highlight = 1;
+                /* no se emite la cerca de apertura */
+            } else {
+                /* cerca con lenguaje: abre bloque de código */
+                in_code_block = 1;
+                line.type  = LINE_CODE_BLOCK;
+                add_span(&line, raw_lines[i], SPAN_NORMAL, NULL);
+                doc_add_line(doc, &line);
+            }
+            continue;
+        }
+
+        /* ── dentro de un bloque resaltado ── */
+        if (in_highlight) {
+            line.type = LINE_HIGHLIGHT;
+            parse_inline(&line, raw_lines[i]);
             doc_add_line(doc, &line);
             continue;
         }

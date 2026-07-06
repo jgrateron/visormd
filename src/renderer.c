@@ -107,6 +107,7 @@ static chtype span_attr(SpanType st, LineType lt) {
             case LINE_TABLE_HSEP:    cp = CP_TABLE_BORDER;              break;
             case LINE_TABLE_RSEP:    cp = CP_TABLE_BORDER;              break;
             case LINE_TABLE_BOTTOM:  cp = CP_TABLE_BORDER;              break;
+            case LINE_HIGHLIGHT:     cp = CP_HIGHLIGHT;                 break;
             default:                 cp = CP_DEFAULT;                   break;
             }
         }
