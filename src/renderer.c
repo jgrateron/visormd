@@ -117,6 +117,8 @@ static chtype span_attr(SpanType st, LineType lt) {
         case SPAN_ITALIC:      cp = CP_ITALIC; at = A_ITALIC;      break;
         case SPAN_BOLD_ITALIC: cp = CP_BOLD;   at = A_BOLD|A_ITALIC;break;
         case SPAN_CODE:        cp = CP_CODE;                       break;
+        case SPAN_BOLD_CODE:   cp = CP_CODE; at = A_BOLD;           break;
+        case SPAN_ITALIC_CODE: cp = CP_CODE; at = A_ITALIC;         break;
         case SPAN_LINK_TEXT:   cp = CP_LINK;   at = A_UNDERLINE;   break;
         case SPAN_LINK_URL:    cp = CP_LINK;                       break;
         case SPAN_BASH_COMMAND:cp = CP_BASH_COMMAND; at = A_BOLD;  break;

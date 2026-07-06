@@ -100,7 +100,19 @@ static void parse_inline(ParsedLine *line, const char *text) {
             if (end >= 0) {
                 flush_normal(&buf, line);
                 char *inner = strndup(text + i + 2, (size_t)(end - i - 2));
-                add_span(line, inner, SPAN_BOLD, NULL);
+                ParsedLine tmp = {0};
+                parse_inline(&tmp, inner);
+                for (int s = 0; s < tmp.span_count; s++) {
+                    Span *sp = &tmp.spans[s];
+                    SpanType t = sp->type;
+                    if (t == SPAN_NORMAL)       t = SPAN_BOLD;
+                    else if (t == SPAN_CODE)    t = SPAN_BOLD_CODE;
+                    else if (t == SPAN_ITALIC)  t = SPAN_BOLD_ITALIC;
+                    add_span(line, sp->text, t, sp->url);
+                    free(sp->text);
+                    free(sp->url);
+                }
+                free(tmp.spans);
                 free(inner);
                 i = end + 2;
                 continue;
@@ -115,7 +127,19 @@ static void parse_inline(ParsedLine *line, const char *text) {
             if (end >= 0) {
                 flush_normal(&buf, line);
                 char *inner = strndup(text + i + 1, (size_t)(end - i - 1));
-                add_span(line, inner, SPAN_ITALIC, NULL);
+                ParsedLine tmp = {0};
+                parse_inline(&tmp, inner);
+                for (int s = 0; s < tmp.span_count; s++) {
+                    Span *sp = &tmp.spans[s];
+                    SpanType t = sp->type;
+                    if (t == SPAN_NORMAL)       t = SPAN_ITALIC;
+                    else if (t == SPAN_CODE)    t = SPAN_ITALIC_CODE;
+                    else if (t == SPAN_BOLD)    t = SPAN_BOLD_ITALIC;
+                    add_span(line, sp->text, t, sp->url);
+                    free(sp->text);
+                    free(sp->url);
+                }
+                free(tmp.spans);
                 free(inner);
                 i = end + 1;
                 continue;
@@ -135,7 +159,10 @@ static void parse_inline(ParsedLine *line, const char *text) {
                 i = end + 1;
                 continue;
             }
-            cb_append(&buf, text[i++]);
+            /* backtick solitario: el resto de la línea es código inline */
+            flush_normal(&buf, line);
+            add_span(line, text + i + 1, SPAN_CODE, NULL);
+            i = len;
             continue;
         }
 
