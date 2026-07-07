@@ -337,10 +337,12 @@ static LineType detect_line_type(const char *raw, char **out_text,
         }
     }
 
-    /* ── cita: > texto ── */
+    /* ── cita: > texto (anidados: >>, >>>, etc.) ── */
     if (*p == '>') {
-        p++;
-        if (*p == ' ') p++;
+        while (*p == '>') {
+            p++;
+            if (*p == ' ') p++;
+        }
         *out_text = strdup(p);
         return LINE_BLOCKQUOTE;
     }
