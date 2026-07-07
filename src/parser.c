@@ -83,6 +83,19 @@ static int find_single_star(const char *text, int start) {
     return -1;
 }
 
+/* busca un '_' que no sea parte de '__' y que sea
+ * cierre válido: seguido de no-alfanumérico o fin */
+static int find_single_underscore(const char *text, int start) {
+    for (int i = start; text[i]; i++) {
+        if (text[i] == '_' && text[i + 1] != '_') {
+            if (text[i + 1] == '\0' || !isalnum((unsigned char)text[i + 1]))
+                return i;
+        }
+        if (text[i] == '_' && text[i + 1] == '_') i++;
+    }
+    return -1;
+}
+
 /* ──────────────────────────────────────────────
  * parser inline: **bold**  *italic*  `code`
  *                [text](url)
@@ -121,6 +134,57 @@ static void parse_inline(ParsedLine *line, const char *text) {
             continue;
         }
 
+        /* ── bold __...__ (y ___...___ → bold+italic) ── */
+        if (text[i] == '_' && text[i + 1] == '_') {
+            int inner_start = i + 2;
+            int extra_end   = 0;  /* chars extra después del __ de cierre */
+
+            /* ___ al abrir: ¿_ italic después del __? */
+            int has_open_it = (text[inner_start] == '_' &&
+                               text[inner_start + 1] != '_' &&
+                               text[inner_start + 1] != ' ' &&
+                               text[inner_start + 1] != '\0');
+            if (has_open_it) inner_start++;
+
+            int end = find_str(text, "__", inner_start);
+
+            /* ___ al cerrar: ¿_ italic antes o después del __? */
+            if (end >= 0 && text[end + 2] == '_' && text[end + 3] != '_') {
+                if (text[end + 3] == '\0' ||
+                    !isalnum((unsigned char)text[end + 3]))
+                    extra_end = 1;
+            }
+
+            if (end >= 0) {
+                flush_normal(&buf, line);
+                char *inner = strndup(text + inner_start,
+                                      (size_t)(end - inner_start));
+                ParsedLine tmp = {0};
+                parse_inline(&tmp, inner);
+                for (int s = 0; s < tmp.span_count; s++) {
+                    Span *sp = &tmp.spans[s];
+                    SpanType t = sp->type;
+                    if (t == SPAN_NORMAL)       t = SPAN_BOLD;
+                    else if (t == SPAN_CODE)    t = SPAN_BOLD_CODE;
+                    else if (t == SPAN_ITALIC)  t = SPAN_BOLD_ITALIC;
+                    /* ___…___  → promover bold a bold+italic */
+                    if (has_open_it && extra_end) {
+                        if (t == SPAN_BOLD)      t = SPAN_BOLD_ITALIC;
+                        else if (t == SPAN_BOLD_CODE) t = SPAN_BOLD_ITALIC;
+                    }
+                    add_span(line, sp->text, t, sp->url);
+                    free(sp->text);
+                    free(sp->url);
+                }
+                free(tmp.spans);
+                free(inner);
+                i = end + 2 + extra_end;
+                continue;
+            }
+            cb_append(&buf, text[i++]);
+            continue;
+        }
+
         /* ── italic *...* (pero no **) ── */
         if (text[i] == '*') {
             int end = find_single_star(text, i + 1);
@@ -143,6 +207,38 @@ static void parse_inline(ParsedLine *line, const char *text) {
                 free(inner);
                 i = end + 1;
                 continue;
+            }
+            cb_append(&buf, text[i++]);
+            continue;
+        }
+
+        /* ── italic _..._ (pero no __; requiere borde de palabra) ── */
+        if (text[i] == '_') {
+            int can_open = (i == 0) ||
+                (!isalnum((unsigned char)text[i - 1]) &&
+                 text[i - 1] != '_');
+            if (can_open && text[i + 1] != '\0' && text[i + 1] != ' ') {
+                int end = find_single_underscore(text, i + 1);
+                if (end >= 0) {
+                    flush_normal(&buf, line);
+                    char *inner = strndup(text + i + 1, (size_t)(end - i - 1));
+                    ParsedLine tmp = {0};
+                    parse_inline(&tmp, inner);
+                    for (int s = 0; s < tmp.span_count; s++) {
+                        Span *sp = &tmp.spans[s];
+                        SpanType t = sp->type;
+                        if (t == SPAN_NORMAL)       t = SPAN_ITALIC;
+                        else if (t == SPAN_CODE)    t = SPAN_ITALIC_CODE;
+                        else if (t == SPAN_BOLD)    t = SPAN_BOLD_ITALIC;
+                        add_span(line, sp->text, t, sp->url);
+                        free(sp->text);
+                        free(sp->url);
+                    }
+                    free(tmp.spans);
+                    free(inner);
+                    i = end + 1;
+                    continue;
+                }
             }
             cb_append(&buf, text[i++]);
             continue;
