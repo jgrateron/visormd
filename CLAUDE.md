@@ -25,12 +25,12 @@ make test           # Build and run all verification tests
 make clean test     # Clean rebuild and test
 ```
 
-Test Markdown inputs (`test*.md`) and their expected plain-text outputs (`test*_expected.txt`) live in the repo root. The expected files were generated with `--cat` redirected to a file (no ANSI codes — `cat_renderer` suppresses them when stdout is not a tty). The `test` target compares each `test*.md` against its `test*_expected.txt` via `diff`.
+Test Markdown inputs (`test/*.md`) and their expected plain-text outputs (`test/*_expected.txt`) live in the `test/` directory. The expected files were generated with `--cat` redirected to a file (no ANSI codes — `cat_renderer` suppresses them when stdout is not a tty). The `test` target compares each `test*.md` against its `test*_expected.txt` via `diff`.
 
 To regenerate expected outputs after a rendering change:
 
 ```bash
-for f in test.md test_emoji.md test_table.md test_table2.md test_user.md test_utf8.md test_wide.md; do
+for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md; do
     base="${f%.md}"
     TERM=xterm-256color LANG=C.UTF-8 ./visormd --cat "$f" > "${base}_expected.txt"
 done
