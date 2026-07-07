@@ -16,6 +16,6 @@
 ├──────────────────────────────┼───────────────────────────────────────────────┤
 │Switch exhaustivo             │Ramas de lógica olvidadas al evolucionar       │
 ├──────────────────────────────┼───────────────────────────────────────────────┤
-│Lambdas / Functional Interface│Bugs introducidos por código repetitivo excesiv│
-│s                             │o                                              │
+│Lambdas / Functional          │Bugs introducidos por código repetitivo        │
+│Interfaces                    │excesivo                                       │
 └──────────────────────────────┴───────────────────────────────────────────────┘

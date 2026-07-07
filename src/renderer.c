@@ -206,16 +206,20 @@ static int render_cell_slice(WINDOW *win, int screen_y, int screen_x,
  * retorna cantidad de chars, 0 si vacío, -1 en error.
  * el caller debe liberar *out_chars y *out_attrs.
  * ────────────────────────────────────────────── */
-static int flatten_spans(ParsedLine *line, wchar_t **out_chars,
-                          chtype **out_attrs) {
+/* ──────────────────────────────────────────────
+ * aplanar un rango de spans (start..end-1) en arrays
+ * de wide chars y atributos. usado para celdas de tabla.
+ * ────────────────────────────────────────────── */
+static int flatten_span_range(Span *spans, int start, int end,
+                               LineType line_type,
+                               wchar_t **out_chars, chtype **out_attrs) {
     wchar_t wbuf[4096];
     int total = 0;
 
-    /* primer paso: contar caracteres wide */
-    for (int s = 0; s < line->span_count; s++) {
-        total += utf8_to_wide(line->spans[s].text,
-                              (int)strlen(line->spans[s].text),
-                              wbuf, 4096);
+    for (int s = start; s < end; s++) {
+        if (spans[s].type == SPAN_TABLE_PIPE) continue;
+        total += utf8_to_wide(spans[s].text,
+                              (int)strlen(spans[s].text), wbuf, 4096);
     }
 
     if (total == 0) {
@@ -232,11 +236,11 @@ static int flatten_spans(ParsedLine *line, wchar_t **out_chars,
         return -1;
     }
 
-    /* segundo paso: llenar arrays con chars y sus atributos */
     int idx = 0;
-    for (int s = 0; s < line->span_count && idx < total; s++) {
-        Span  *span = &line->spans[s];
-        chtype attr = span_attr(span->type, line->type);
+    for (int s = start; s < end && idx < total; s++) {
+        if (spans[s].type == SPAN_TABLE_PIPE) continue;
+        Span  *span = &spans[s];
+        chtype attr = span_attr(span->type, line_type);
         int    wlen = utf8_to_wide(span->text, (int)strlen(span->text),
                                     wbuf, 4096);
         for (int j = 0; j < wlen && idx < total; j++) {
@@ -249,6 +253,12 @@ static int flatten_spans(ParsedLine *line, wchar_t **out_chars,
     *out_chars = chars;
     *out_attrs = attrs;
     return total;
+}
+
+static int flatten_spans(ParsedLine *line, wchar_t **out_chars,
+                          chtype **out_attrs) {
+    return flatten_span_range(line->spans, 0, line->span_count,
+                               line->type, out_chars, out_attrs);
 }
 
 /* ──────────────────────────────────────────────
@@ -363,11 +373,31 @@ static int line_wrapped_rows(ParsedLine *line, int avail_w,
 
         /* ── calcular líneas por celda ── */
         int max_lines = 1;
-        for (int c = 0; c < ncols; c++) {
-            int cw = cell_spans_width(line->spans,
-                                      cell_start[c], cell_end[c]);
-            int lines = (cw > 0) ? ((cw + adj_w[c] - 1) / adj_w[c]) : 1;
-            if (lines > max_lines) max_lines = lines;
+        if (wrap_words) {
+            /* word-wrap: aplanar cada celda y partir en límites de palabra */
+            for (int c = 0; c < ncols; c++) {
+                wchar_t *chars = NULL;
+                chtype  *attrs = NULL;
+                int total = flatten_span_range(line->spans,
+                                                cell_start[c], cell_end[c],
+                                                line->type, &chars, &attrs);
+                if (total > 0) {
+                    int *breaks = NULL;
+                    int lines = build_visual_lines(chars, total, adj_w[c],
+                                                    1, &breaks);
+                    if (lines > max_lines) max_lines = lines;
+                    free(breaks);
+                }
+                free(chars);
+                free(attrs);
+            }
+        } else {
+            for (int c = 0; c < ncols; c++) {
+                int cw = cell_spans_width(line->spans,
+                                          cell_start[c], cell_end[c]);
+                int lines = (cw > 0) ? ((cw + adj_w[c] - 1) / adj_w[c]) : 1;
+                if (lines > max_lines) max_lines = lines;
+            }
         }
 
         free(adj_w);
@@ -616,18 +646,53 @@ static int render_source_line(Renderer *r, int line_idx,
         }
         if (ci >= 0 && ci < ncols) cell_end[ci] = line->span_count;
 
-        /* ── calcular líneas de wrapping por celda ── */
-        int *cell_cw   = malloc(sizeof(int) * (size_t)ncols);
+        /* ── preparar datos de celda para renderizado ── */
         int *cell_lines = malloc(sizeof(int) * (size_t)ncols);
         int  max_lines  = 1;
 
-        for (int c = 0; c < ncols; c++) {
-            cell_cw[c] = cell_spans_width(line->spans,
-                                          cell_start[c], cell_end[c]);
-            cell_lines[c] = (cell_cw[c] > 0)
-                ? ((cell_cw[c] + adj_w[c] - 1) / adj_w[c])
-                : 1;
-            if (cell_lines[c] > max_lines) max_lines = cell_lines[c];
+        /* arrays para word-wrap: solo se usan si r->wrap_words está activo */
+        wchar_t **cell_chars  = NULL;
+        chtype  **cell_attrs  = NULL;
+        int     **cell_breaks = NULL;
+        int      *cell_total  = NULL;
+
+        if (r->wrap_words) {
+            cell_chars  = calloc((size_t)ncols, sizeof(wchar_t*));
+            cell_attrs  = calloc((size_t)ncols, sizeof(chtype*));
+            cell_breaks = calloc((size_t)ncols, sizeof(int*));
+            cell_total  = calloc((size_t)ncols, sizeof(int));
+
+            for (int c = 0; c < ncols; c++) {
+                if (cell_start[c] < cell_end[c]) {
+                    cell_total[c] = flatten_span_range(
+                        line->spans, cell_start[c], cell_end[c],
+                        line->type, &cell_chars[c], &cell_attrs[c]);
+                    if (cell_total[c] > 0) {
+                        int *breaks = NULL;
+                        cell_lines[c] = build_visual_lines(
+                            cell_chars[c], cell_total[c], adj_w[c],
+                            1, &breaks);
+                        cell_breaks[c] = breaks;
+                        if (cell_lines[c] < 1) cell_lines[c] = 1;
+                    } else {
+                        cell_lines[c] = 1;
+                    }
+                } else {
+                    cell_lines[c] = 1;
+                }
+                if (cell_lines[c] > max_lines) max_lines = cell_lines[c];
+            }
+        } else {
+            int *cell_cw = malloc(sizeof(int) * (size_t)ncols);
+            for (int c = 0; c < ncols; c++) {
+                cell_cw[c] = cell_spans_width(line->spans,
+                                              cell_start[c], cell_end[c]);
+                cell_lines[c] = (cell_cw[c] > 0)
+                    ? ((cell_cw[c] + adj_w[c] - 1) / adj_w[c])
+                    : 1;
+                if (cell_lines[c] > max_lines) max_lines = cell_lines[c];
+            }
+            free(cell_cw);
         }
         if (max_lines < 1) max_lines = 1;
 
@@ -635,7 +700,15 @@ static int render_source_line(Renderer *r, int line_idx,
         int start_wr = (skip_rows > 0) ? skip_rows : 0;
         if (start_wr >= max_lines) {
             free(adj_w); free(cell_start); free(cell_end);
-            free(cell_cw); free(cell_lines);
+            free(cell_lines);
+            if (r->wrap_words) {
+                for (int c = 0; c < ncols; c++) {
+                    free(cell_chars[c]); free(cell_attrs[c]);
+                    free(cell_breaks[c]);
+                }
+                free(cell_chars); free(cell_attrs);
+                free(cell_breaks); free(cell_total);
+            }
             return max_lines;
         }
 
@@ -656,46 +729,104 @@ static int render_source_line(Renderer *r, int line_idx,
 
             for (int c = 0; c < ncols; c++) {
                 int col_w = adj_w[c];
-                int drawn = 0;
 
                 if (wr < cell_lines[c] && cell_start[c] < cell_end[c]) {
-                    int skip_cols = wr * col_w;
-                    int render_w  = col_w;
 
-                    /* última línea: ajustar al contenido restante */
-                    if (wr == cell_lines[c] - 1) {
-                        int remaining = cell_cw[c] - skip_cols;
-                        if (remaining < render_w) render_w = remaining;
-                    }
+                    if (r->wrap_words && cell_chars[c] && cell_breaks[c]) {
+                        /* ── word-wrap: renderizar línea visual completa ── */
+                        int line_start = cell_breaks[c][wr];
+                        int line_end   = (wr + 1 < cell_lines[c])
+                                         ? cell_breaks[c][wr + 1]
+                                         : cell_total[c];
 
-                    /* alineación: solo para celdas de una línea */
-                    int align_pad = 0;
-                    if (cell_lines[c] == 1 && render_w < col_w) {
-                        int pad = col_w - render_w;
-                        if (line->table_aligns[c] == 0)
-                            align_pad = pad / 2;
-                        else if (line->table_aligns[c] == 1)
-                            align_pad = pad;
-                        for (int p = 0; p < align_pad && sx < r->term_w; p++) {
+                        /* calcular ancho visual de esta línea */
+                        int line_width = 0;
+                        for (int k = line_start; k < line_end; k++) {
+                            int cw = wcwidth(cell_chars[c][k]);
+                            line_width += (cw < 0) ? 1 : cw;
+                        }
+
+                        /* alineación para celdas de una sola línea visual */
+                        int align_pad = 0;
+                        if (cell_lines[c] == 1 && line_width < col_w) {
+                            int pad = col_w - line_width;
+                            if (line->table_aligns[c] == 0)
+                                align_pad = pad / 2;
+                            else if (line->table_aligns[c] == 1)
+                                align_pad = pad;
+                            for (int p = 0; p < align_pad && sx < r->term_w; p++) {
+                                wmove(r->main_win, sy, sx++);
+                                waddch(r->main_win, ' ');
+                            }
+                        }
+
+                        /* dibujar chars agrupando mismo atributo */
+                        int ci = line_start;
+                        while (ci < line_end && sx < r->term_w) {
+                            int run_end = ci + 1;
+                            while (run_end < line_end &&
+                                   cell_attrs[c][run_end] == cell_attrs[c][ci])
+                                run_end++;
+
+                            wmove(r->main_win, sy, sx);
+                            wattron(r->main_win, cell_attrs[c][ci]);
+                            waddnwstr(r->main_win, cell_chars[c] + ci,
+                                      run_end - ci);
+                            wattroff(r->main_win, cell_attrs[c][ci]);
+
+                            for (int k = ci; k < run_end; k++) {
+                                int cw = wcwidth(cell_chars[c][k]);
+                                sx += (cw < 0) ? 1 : cw;
+                            }
+                            ci = run_end;
+                        }
+
+                        /* rellenar espacio sobrante */
+                        int fill = col_w - line_width - align_pad;
+                        if (fill < 0) fill = 0;
+                        for (int p = 0; p < fill && sx < r->term_w; p++) {
                             wmove(r->main_win, sy, sx++);
                             waddch(r->main_win, ' ');
                         }
-                    }
+                    } else {
+                        /* ── char-wrap clásico ── */
+                        int skip_cols = wr * col_w;
+                        int render_w  = col_w;
+                        int cell_cw = cell_spans_width(line->spans,
+                                                       cell_start[c],
+                                                       cell_end[c]);
 
-                    /* dibujar contenido de esta sub-fila */
-                    drawn = render_cell_slice(r->main_win, sy, sx,
-                                              line->spans,
-                                              cell_start[c], cell_end[c],
-                                              skip_cols, render_w,
-                                              line->type);
-                    sx += drawn;
+                        if (wr == cell_lines[c] - 1) {
+                            int remaining = cell_cw - skip_cols;
+                            if (remaining < render_w) render_w = remaining;
+                        }
 
-                    /* rellenar espacio sobrante hasta el ancho total */
-                    int fill = col_w - drawn - align_pad;
-                    if (fill < 0) fill = 0;
-                    for (int p = 0; p < fill && sx < r->term_w; p++) {
-                        wmove(r->main_win, sy, sx++);
-                        waddch(r->main_win, ' ');
+                        int align_pad = 0;
+                        if (cell_lines[c] == 1 && render_w < col_w) {
+                            int pad = col_w - render_w;
+                            if (line->table_aligns[c] == 0)
+                                align_pad = pad / 2;
+                            else if (line->table_aligns[c] == 1)
+                                align_pad = pad;
+                            for (int p = 0; p < align_pad && sx < r->term_w; p++) {
+                                wmove(r->main_win, sy, sx++);
+                                waddch(r->main_win, ' ');
+                            }
+                        }
+
+                        int drawn = render_cell_slice(r->main_win, sy, sx,
+                                                      line->spans,
+                                                      cell_start[c], cell_end[c],
+                                                      skip_cols, render_w,
+                                                      line->type);
+                        sx += drawn;
+
+                        int fill = col_w - drawn - align_pad;
+                        if (fill < 0) fill = 0;
+                        for (int p = 0; p < fill && sx < r->term_w; p++) {
+                            wmove(r->main_win, sy, sx++);
+                            waddch(r->main_win, ' ');
+                        }
                     }
                 } else {
                     /* sub-fila sin contenido: espacios */
@@ -736,7 +867,16 @@ static int render_source_line(Renderer *r, int line_idx,
         }
 
         free(adj_w); free(cell_start); free(cell_end);
-        free(cell_cw); free(cell_lines);
+        free(cell_lines);
+        if (r->wrap_words) {
+            for (int c = 0; c < ncols; c++) {
+                free(cell_chars[c]);
+                free(cell_attrs[c]);
+                free(cell_breaks[c]);
+            }
+            free(cell_chars); free(cell_attrs);
+            free(cell_breaks); free(cell_total);
+        }
 
         int used = sy - screen_y;
         if (used < 1) used = 1;

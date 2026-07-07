@@ -3,15 +3,17 @@ Prueba
 ┌──────────┬───────────────────────────────────────────────────────────────────┐
 │ Problema │                              Detalle                              │
 ├──────────┼───────────────────────────────────────────────────────────────────┤
-│Costo comp│Generar y verificar ZK proofs es mucho mas pesado que escribir un v│
-│utacional │alor en un ledger. A escala electoral real, esto importa.          │
+│Costo     │Generar y verificar ZK proofs es mucho mas pesado que escribir un  │
+│computacio│valor en un ledger. A escala electoral real, esto importa.         │
+│nal       │                                                                   │
 ├──────────┼───────────────────────────────────────────────────────────────────┤
-│Complejida│Las librerias criptograficas son dificiles de implementar correctam│
-│d de imple│ente. Un bug en un circuito ZK puede romper exactamente la garantia│
-│mentacion │ que necesitabas, sin lanzar un error obvio.                       │
+│Complejida│Las librerias criptograficas son dificiles de implementar          │
+│d de      │correctamente. Un bug en un circuito ZK puede romper exactamente   │
+│implementa│la garantia que necesitabas, sin lanzar un error obvio.            │
+│cion      │                                                                   │
 ├──────────┼───────────────────────────────────────────────────────────────────┤
-│Auditabili│La mayoria de los votantes, funcionarios electorales y auditores no│
-│dad humana│ tienen forma de verificar independientemente que un sistema ZK hac│
-│          │e lo que dice. Esto crea otro problema de confianza distinto al que│
-│          │ resolvia.                                                         │
+│Auditabili│La mayoria de los votantes, funcionarios electorales y auditores   │
+│dad humana│no tienen forma de verificar independientemente que un sistema ZK  │
+│          │hace lo que dice. Esto crea otro problema de confianza distinto al │
+│          │que resolvia.                                                      │
 └──────────┴───────────────────────────────────────────────────────────────────┘

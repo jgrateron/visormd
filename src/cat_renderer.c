@@ -74,20 +74,6 @@ static int utf8_to_wide(const char *utf8, int byte_len,
 }
 
 /* ──────────────────────────────────────────────
- * ancho visual de un span (en columnas de terminal)
- * ────────────────────────────────────────────── */
-static int span_visual_width(Span *span) {
-    wchar_t wbuf[4096];
-    int wlen = utf8_to_wide(span->text, (int)strlen(span->text), wbuf, 4096);
-    int total = 0;
-    for (int j = 0; j < wlen; j++) {
-        int cw = wcwidth(wbuf[j]);
-        total += (cw < 0) ? 1 : cw;
-    }
-    return total;
-}
-
-/* ──────────────────────────────────────────────
  * mapeo de SpanType + LineType → prefijo ANSI
  * misma lógica que span_attr() en renderer.c
  * ────────────────────────────────────────────── */
@@ -159,72 +145,97 @@ static void fprint_span(FILE *f, int use_ansi,
 }
 
 /* ──────────────────────────────────────────────
- * helper: ancho visual de un rango de spans
+ * aplanar un rango de spans (celda de tabla) en
+ * arrays de wide chars + SpanType por carácter.
  * ────────────────────────────────────────────── */
-static int range_visual_width(Span *spans, int start, int end) {
+static int flatten_cell_cat(Span *spans, int start, int end,
+                             wchar_t **out_chars, SpanType **out_types) {
+    wchar_t wbuf[4096];
     int total = 0;
+
     for (int s = start; s < end; s++) {
         if (spans[s].type == SPAN_TABLE_PIPE) continue;
-        total += span_visual_width(&spans[s]);
+        total += utf8_to_wide(spans[s].text,
+                              (int)strlen(spans[s].text), wbuf, 4096);
     }
+
+    if (total == 0) {
+        *out_chars = NULL;
+        *out_types = NULL;
+        return 0;
+    }
+
+    wchar_t   *chars = malloc(sizeof(wchar_t)   * (size_t)total);
+    SpanType  *types = malloc(sizeof(SpanType)   * (size_t)total);
+    if (!chars || !types) {
+        free(chars); free(types);
+        return -1;
+    }
+
+    int idx = 0;
+    for (int s = start; s < end && idx < total; s++) {
+        if (spans[s].type == SPAN_TABLE_PIPE) continue;
+        Span     *span = &spans[s];
+        SpanType  st   = span->type;
+        int wlen = utf8_to_wide(span->text, (int)strlen(span->text),
+                                wbuf, 4096);
+        for (int j = 0; j < wlen && idx < total; j++) {
+            chars[idx] = wbuf[j];
+            types[idx] = st;
+            idx++;
+        }
+    }
+
+    *out_chars = chars;
+    *out_types = types;
     return total;
 }
 
 /* ──────────────────────────────────────────────
- * imprimir una porción horizontal de una celda
- * (salta skip_cols, dibuja hasta max_cols)
- * retorna columnas visuales dibujadas
+ * construir líneas visuales con word-wrap.
+ * misma lógica que build_visual_lines en renderer.c
  * ────────────────────────────────────────────── */
-static int fprint_cell_slice(FILE *f, int use_ansi,
-                              Span *spans, int start, int end,
-                              int skip_cols, int max_cols,
-                              LineType line_type) {
-    int rendered = 0;
-    int skipped  = 0;
-    wchar_t wbuf[4096];
-
-    for (int s = start; s < end && rendered < max_cols; s++) {
-        if (spans[s].type == SPAN_TABLE_PIPE) continue;
-
-        Span *sp = &spans[s];
-        int wlen = utf8_to_wide(sp->text, (int)strlen(sp->text),
-                                wbuf, 4096);
-
-        /* emitir prefijo ANSI para el span */
-        int span_started = 0;
-
-        for (int j = 0; j < wlen && rendered < max_cols; j++) {
-            int cw = wcwidth(wbuf[j]);
-            if (cw < 0) cw = 1;
-
-            if (skipped < skip_cols) {
-                skipped += cw;
-                continue;
-            }
-
-            if (rendered + cw > max_cols)
-                return rendered;
-
-            if (!span_started) {
-                emit_span_ansi(f, use_ansi, sp->type, line_type);
-                span_started = 1;
-            }
-
-            /* imprimir el wide char como UTF-8 */
-            char mb[MB_CUR_MAX + 1];
-            int len = (int)wctomb(mb, wbuf[j]);
-            if (len > 0) {
-                mb[len] = '\0';
-                fputs(mb, f);
-            }
-            rendered += cw;
-        }
-
-        if (span_started && use_ansi)
-            fprintf(f, "%s", RST);
+static int build_visual_lines_cat(wchar_t *chars, int total, int avail_w,
+                                   int **out_breaks) {
+    if (total <= 0 || avail_w < 1) {
+        *out_breaks = NULL;
+        return (total <= 0) ? 0 : 1;
     }
 
-    return rendered;
+    int *breaks = malloc(sizeof(int) * (size_t)(total + 1));
+    if (!breaks) return -1;
+
+    int pos = 0, line_count = 0;
+
+    while (pos < total) {
+        breaks[line_count++] = pos;
+
+        int col = 0;
+        int last_space_pos = -1;
+        int line_end = pos;
+
+        while (line_end < total) {
+            int cw = wcwidth(chars[line_end]);
+            if (cw < 0) cw = 1;
+            if (col + cw > avail_w) break;
+            if (chars[line_end] == L' ')
+                last_space_pos = line_end;
+            col += cw;
+            line_end++;
+        }
+
+        if (line_end < total && last_space_pos >= pos)
+            line_end = last_space_pos;
+
+        if (line_end == pos) line_end = pos + 1;
+
+        pos = line_end;
+        if (pos < total && chars[pos] == L' ')
+            pos++;
+    }
+
+    *out_breaks = breaks;
+    return line_count;
 }
 
 /* ──────────────────────────────────────────────
@@ -280,23 +291,31 @@ static void cat_render_table_row(FILE *f, int use_ansi,
     }
     if (ci >= 0 && ci < ncols) cell_end[ci] = line->span_count;
 
-    /* calcular líneas de wrapping por celda */
-    int *cell_cw    = malloc(sizeof(int) * (size_t)ncols);
-    int *cell_lines = malloc(sizeof(int) * (size_t)ncols);
-    int  max_lines  = 1;
-
-    if (!cell_cw || !cell_lines) {
-        free(cell_start); free(cell_end);
-        free(cell_cw);  free(cell_lines);
-        return;
-    }
+    /* ── preparar datos de celda con word-wrap ── */
+    wchar_t  **cell_chars  = calloc((size_t)ncols, sizeof(wchar_t*));
+    SpanType **cell_types  = calloc((size_t)ncols, sizeof(SpanType*));
+    int      **cell_breaks = calloc((size_t)ncols, sizeof(int*));
+    int       *cell_total  = calloc((size_t)ncols, sizeof(int));
+    int       *cell_lines  = calloc((size_t)ncols, sizeof(int));
+    int        max_lines   = 1;
 
     for (int c = 0; c < ncols; c++) {
-        cell_cw[c] = range_visual_width(line->spans,
-                                         cell_start[c], cell_end[c]);
-        cell_lines[c] = (cell_cw[c] > 0)
-            ? ((cell_cw[c] + adj_w[c] - 1) / adj_w[c])
-            : 1;
+        if (cell_start[c] < cell_end[c]) {
+            cell_total[c] = flatten_cell_cat(line->spans,
+                                              cell_start[c], cell_end[c],
+                                              &cell_chars[c], &cell_types[c]);
+            if (cell_total[c] > 0) {
+                int *breaks = NULL;
+                cell_lines[c] = build_visual_lines_cat(
+                    cell_chars[c], cell_total[c], adj_w[c], &breaks);
+                cell_breaks[c] = breaks;
+                if (cell_lines[c] < 1) cell_lines[c] = 1;
+            } else {
+                cell_lines[c] = 1;
+            }
+        } else {
+            cell_lines[c] = 1;
+        }
         if (cell_lines[c] > max_lines) max_lines = cell_lines[c];
     }
     if (max_lines < 1) max_lines = 1;
@@ -311,37 +330,58 @@ static void cat_render_table_row(FILE *f, int use_ansi,
         for (int c = 0; c < ncols; c++) {
             int col_w = adj_w[c];
 
-            if (wr < cell_lines[c] && cell_start[c] < cell_end[c]) {
-                int skip_cols = wr * col_w;
-                int render_w  = col_w;
+            if (wr < cell_lines[c] && cell_chars[c] && cell_breaks[c]) {
+                int line_start = cell_breaks[c][wr];
+                int line_end   = (wr + 1 < cell_lines[c])
+                                 ? cell_breaks[c][wr + 1]
+                                 : cell_total[c];
 
-                /* ajustar ancho en la última línea de la celda */
-                if (wr == cell_lines[c] - 1) {
-                    int remaining = cell_cw[c] - skip_cols;
-                    if (remaining < render_w) render_w = remaining;
+                /* ancho visual de esta línea */
+                int line_width = 0;
+                for (int k = line_start; k < line_end; k++) {
+                    int cw = wcwidth(cell_chars[c][k]);
+                    line_width += (cw < 0) ? 1 : cw;
                 }
 
                 /* alineación para celdas de una sola línea */
                 int align_pad = 0;
-                if (cell_lines[c] == 1 && render_w < col_w &&
+                if (cell_lines[c] == 1 && line_width < col_w &&
                     line->table_aligns) {
-                    int pad = col_w - render_w;
-                    if (line->table_aligns[c] == 0)      /* centro */
+                    int pad = col_w - line_width;
+                    if (line->table_aligns[c] == 0)
                         align_pad = pad / 2;
-                    else if (line->table_aligns[c] == 1)  /* derecha */
+                    else if (line->table_aligns[c] == 1)
                         align_pad = pad;
                     for (int p = 0; p < align_pad; p++)
                         fputc(' ', f);
                 }
 
-                int drawn = fprint_cell_slice(f, use_ansi,
-                                               line->spans,
-                                               cell_start[c], cell_end[c],
-                                               skip_cols, render_w,
-                                               line->type);
+                /* dibujar caracteres agrupando mismo SpanType */
+                int ci = line_start;
+                while (ci < line_end) {
+                    int run_end = ci + 1;
+                    while (run_end < line_end &&
+                           cell_types[c][run_end] == cell_types[c][ci])
+                        run_end++;
+
+                    emit_span_ansi(f, use_ansi, cell_types[c][ci],
+                                   line->type);
+
+                    for (int k = ci; k < run_end; k++) {
+                        char mb[MB_CUR_MAX + 1];
+                        int len = (int)wctomb(mb, cell_chars[c][k]);
+                        if (len > 0) {
+                            mb[len] = '\0';
+                            fputs(mb, f);
+                        }
+                    }
+
+                    if (use_ansi) fprintf(f, "%s", RST);
+                    ci = run_end;
+                }
 
                 /* rellenar espacio sobrante */
-                int fill = col_w - drawn - align_pad;
+                int fill = col_w - line_width - align_pad;
                 if (fill < 0) fill = 0;
                 for (int p = 0; p < fill; p++)
                     fputc(' ', f);
@@ -367,7 +407,14 @@ static void cat_render_table_row(FILE *f, int use_ansi,
     }
 
     free(cell_start); free(cell_end);
-    free(cell_cw);   free(cell_lines);
+    for (int c = 0; c < ncols; c++) {
+        free(cell_chars[c]);
+        free(cell_types[c]);
+        free(cell_breaks[c]);
+    }
+    free(cell_chars); free(cell_types);
+    free(cell_breaks); free(cell_total);
+    free(cell_lines);
 }
 
 /* ──────────────────────────────────────────────
