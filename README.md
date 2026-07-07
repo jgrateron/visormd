@@ -8,10 +8,10 @@ A terminal-based interactive Markdown viewer written in C11 with ncursesw. It re
 ## Features
 
 - **Headings** (H1–H6) with distinct colors
-- **Inline formatting** — bold, italic, `code`, and [links](https://example.com)
+- **Inline formatting** — bold (`**text**` / `__text__`), italic (`*text*` / `_text_`), `code`, and [links](https://example.com)
 - **Tables** with box-drawing borders (`┌┬┐├┼┤└┴┘`), column alignment (`:---`, `:---:`, `---:`), and inline formatting inside cells
 - **Code blocks** (fenced with ` ``` ` or `~~~`)
-- **Blockquotes**, horizontal rules, unordered and ordered lists
+- **Blockquotes** (with nested `>>`, `>>>` support), horizontal rules, unordered and ordered lists
 - **UTF-8 support** — emoji, CJK characters, and accented text with correct column width (via `wcwidth`)
 - **8 color themes** — Default, Monochrome, Solarized Dark/Light, Nord, Gruvbox Dark, Dracula, One Dark
 - **Vim-like navigation** — `j`/`k`, `gg`/`G`, space/page-up/page-down
@@ -99,7 +99,7 @@ File → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) → Rende
 ```
 
 - **`src/buffer.c`** — Reads a file into a dynamic array of raw UTF-8 strings.
-- **`src/parser.c`** — Parses Markdown into a `Document` tree: classifies line types, extracts inline spans (bold, italic, code, links), parses table blocks with column alignment.
+- **`src/parser.c`** — Parses Markdown into a `Document` tree: classifies line types, extracts inline spans (`**bold**`/`__bold__`, `*italic*`/`_italic_`, code, links), parses nested blockquotes and table blocks with column alignment.
 - **`src/renderer.c`** — ncursesw interactive viewer: renders spans with color attributes, handles line wrapping, scroll state, terminal resize, and the theme selector overlay.
 - **`src/cat_renderer.c`** — Non-interactive stdout renderer used by `--cat`/`-c`: iterates the parsed document and emits plain text with ANSI escape codes (disabled when stdout is not a TTY).
 - **`src/theme.c`** — 8 named color palettes with config persistence in `$HOME/.config/visormd/config` (respects `$XDG_CONFIG_HOME`).
