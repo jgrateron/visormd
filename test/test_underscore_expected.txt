@@ -1,0 +1,33 @@
+Underscore formatting tests (italic and bold)
+
+Basic italic
+This text will be italic with asterisks
+This will also be italic with underscores
+
+Basic bold
+This text will be bold with asterisks
+This will also be bold with underscores
+
+Mixed in one line
+Mixed italic and bold in one line
+Mixed italic and bold in one line
+
+Nested combinations
+Italic wrapping bold inside
+Italic wrapping bold inside
+Bold wrapping italic inside
+Bold wrapping italic inside
+
+Triple for bold+italic
+triple underscore bold+italic
+*triple asterisk bold+italic*
+bold italic combined
+bold italic combined
+
+snake_case preservation
+This_is_a_snake_case_identifier should stay as is
+normal_text_with_underscores inside words
+
+Edge cases
+single_underscore_at_end_of_long_word_is_literal
+_bold_inside_underscores_does_not_break_them

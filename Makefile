@@ -36,7 +36,7 @@ install: $(TARGET)
 
 test: $(TARGET)
 	@passed=0; failed=0; \
-	for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md; do \
+	for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md; do \
 		base=$${f%.md}; \
 		if TERM=xterm-256color LANG=C.UTF-8 ./$(TARGET) --cat "$$f" | diff - "$${base}_expected.txt" > /dev/null 2>&1; then \
 			echo "OK: $$f"; \

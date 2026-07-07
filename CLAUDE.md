@@ -30,7 +30,7 @@ Test Markdown inputs (`test/*.md`) and their expected plain-text outputs (`test/
 To regenerate expected outputs after a rendering change:
 
 ```bash
-for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md; do
+for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md; do
     base="${f%.md}"
     TERM=xterm-256color LANG=C.UTF-8 ./visormd --cat "$f" > "${base}_expected.txt"
 done
@@ -48,6 +48,7 @@ done
 | `test_utf8.md` | Spanish accented characters (áéíóúñü), mixed with bold/italic/inline code/blockquote/fenced bash block, links with accents in URL, escaped heading |
 | `test_wide.md` | Table with very long cell content forcing multi-line wrapping per row, CJK/wide characters |
 | `test_lista.md` | Unordered list items with bold terms, inline code, and long wrapped lines |
+| `test_underscore.md` | Bold with `__text__`, italic with `_text_`, bold+italic with `___text___` and `__*text*__`, snake_case preservation |
 
 ## Architecture
 
@@ -66,7 +67,7 @@ The default mode is interactive (ncurses). With `-c`/`--cat`, the pipeline branc
 
 2. **`src/parser.c`** — Converts raw lines into a `Document` tree:
    - **Line-level** (`detect_line_type`): classifies each line as a heading (H1–H6), code block fence/content, horizontal rule, blockquote, unordered/ordered list, empty line, or paragraph. Handles code block state tracking across lines.
-   - **Inline** (`parse_inline`): within non-code-block lines, identifies spans of `**bold**`, `*italic*`, `` `code` ``, and `[link text](url)`.
+   - **Inline** (`parse_inline`): within non-code-block lines, identifies spans of `**bold**`/`__bold__`, `*italic*`/`_italic_`, `` `code` ``, and `[link text](url)`.
    - **List markers** are extracted as separate `SPAN_LIST_MARKER` spans so the renderer can color them distinctly.
    - Output is a `Document` containing a dynamic array of `ParsedLine`, each with a `LineType`, an indent level, and an array of `Span` structs (each with text, `SpanType`, and optional URL).
 
