@@ -74,6 +74,7 @@ Without options, the program starts in interactive mode with ncurses.
 | Key | Action |
 |-----|--------|
 | `q` | Quit |
+| `r` | Reload the file from disk |
 | `j` / `↓` | Scroll down one line |
 | `k` / `↑` | Scroll up one line |
 | Space / PgDn | Page down |
