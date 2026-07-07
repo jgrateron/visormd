@@ -19,6 +19,7 @@ static void usage(const char *prog) {
             "\n"
             "Teclas durante la visualización interactiva:\n"
             "  q         Salir\n"
+            "  r         Recargar el archivo desde disco\n"
             "  j / ↓     Desplazar una línea hacia abajo\n"
             "  k / ↑     Desplazar una línea hacia arriba\n"
             "  Espacio   Avanzar una página\n"

@@ -1,5 +1,6 @@
 #include "renderer.h"
 #include "theme.h"
+#include "buffer.h"
 #include <ncurses.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1089,7 +1090,7 @@ static void draw_status(Renderer *r) {
     const char *show  = slash ? slash + 1 : fname;
 
     mvwprintw(r->status_win, 0, 0,
-              " visormd  %s  L%d/%d  %d%%  [q]uit [arrows/jk] "
+              " visormd  %s  L%d/%d  %d%%  [q]uit [r]eload [arrows/jk] "
               "[PgUp/PgDn] [g/G] [n]ums [w]rap [F2]tema",
               show,
               r->scroll_line + 1, r->doc->count,
@@ -1263,6 +1264,39 @@ static void scroll_up(Renderer *r, int rows) {
     }
 }
 
+/* ──────────────────────────────────────────────
+ * recargar el archivo desde disco
+ * ────────────────────────────────────────────── */
+static void renderer_reload(Renderer *r) {
+    /* leer archivo nuevamente */
+    TextBuffer *buf = buffer_create();
+    if (!buf) return;
+
+    if (buffer_load_file(buf, r->filename) != 0) {
+        buffer_free(buf);
+        return;
+    }
+
+    /* parsear markdown */
+    Document *new_doc = doc_create();
+    if (!new_doc) {
+        buffer_free(buf);
+        return;
+    }
+    doc_parse(new_doc, buf->lines, buf->count);
+    buffer_free(buf);
+
+    /* reemplazar documento viejo por el nuevo */
+    doc_free(r->doc);
+    r->doc = new_doc;
+
+    /* reclampar scroll por si el archivo se achicó */
+    if (r->scroll_line >= r->doc->count) {
+        r->scroll_line = r->doc->count > 0 ? r->doc->count - 1 : 0;
+        r->scroll_skip = 0;
+    }
+}
+
 int renderer_handle_input(Renderer *r, int ch) {
     switch (ch) {
     case 'q':
@@ -1314,6 +1348,11 @@ int renderer_handle_input(Renderer *r, int ch) {
     case 'w':
     case 'W':
         r->wrap_words = !r->wrap_words;
+        break;
+
+    case 'r':
+    case 'R':
+        renderer_reload(r);
         break;
 
     case KEY_HOME:
