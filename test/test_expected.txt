@@ -31,8 +31,8 @@ Listas
 
 - Item A
 - Item B
-- Sub-item B1
-- Sub-item B2
+  - Sub-item B1
+  - Sub-item B2
 - Item C
 
 1. Primer paso

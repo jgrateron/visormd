@@ -461,10 +461,16 @@ static void parse_bash_line(ParsedLine *line, const char *text) {
 static int extract_list_marker(const char *raw, LineType type,
                                char **marker, const char **rest) {
     const char *p = raw;
+    const char *indent_start = p;
     while (*p == ' ') p++; /* saltar indentación */
+    int indent_len = (int)(p - indent_start);
 
     if (type == LINE_LIST_UNORDERED) {
-        *marker = strndup(p, 2);   /* "- " | "* " | "+ " */
+        /* marker = indent + "- "|"* "|"+ " */
+        *marker = malloc((size_t)(indent_len + 3));
+        if (indent_len > 0) memcpy(*marker, indent_start, (size_t)indent_len);
+        memcpy(*marker + indent_len, p, 2);
+        (*marker)[indent_len + 2] = '\0';
         *rest   = p + 2;
         return 1;
     }
@@ -472,7 +478,10 @@ static int extract_list_marker(const char *raw, LineType type,
         const char *q = p;
         while (isdigit((unsigned char)*q)) q++;
         int ml = (int)(q - p) + 2; /* "123. " */
-        *marker = strndup(p, (size_t)ml);
+        *marker = malloc((size_t)(indent_len + ml + 1));
+        if (indent_len > 0) memcpy(*marker, indent_start, (size_t)indent_len);
+        memcpy(*marker + indent_len, p, (size_t)ml);
+        (*marker)[indent_len + ml] = '\0';
         *rest   = p + ml;
         return 1;
     }
