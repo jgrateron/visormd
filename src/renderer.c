@@ -201,10 +201,119 @@ static int render_cell_slice(WINDOW *win, int screen_y, int screen_x,
 }
 
 /* ──────────────────────────────────────────────
+ * aplanar todos los spans de una línea en arrays
+ * de wide chars y atributos ncurses.
+ * retorna cantidad de chars, 0 si vacío, -1 en error.
+ * el caller debe liberar *out_chars y *out_attrs.
+ * ────────────────────────────────────────────── */
+static int flatten_spans(ParsedLine *line, wchar_t **out_chars,
+                          chtype **out_attrs) {
+    wchar_t wbuf[4096];
+    int total = 0;
+
+    /* primer paso: contar caracteres wide */
+    for (int s = 0; s < line->span_count; s++) {
+        total += utf8_to_wide(line->spans[s].text,
+                              (int)strlen(line->spans[s].text),
+                              wbuf, 4096);
+    }
+
+    if (total == 0) {
+        *out_chars = NULL;
+        *out_attrs = NULL;
+        return 0;
+    }
+
+    wchar_t *chars = malloc(sizeof(wchar_t) * (size_t)total);
+    chtype  *attrs = malloc(sizeof(chtype)  * (size_t)total);
+    if (!chars || !attrs) {
+        free(chars);
+        free(attrs);
+        return -1;
+    }
+
+    /* segundo paso: llenar arrays con chars y sus atributos */
+    int idx = 0;
+    for (int s = 0; s < line->span_count && idx < total; s++) {
+        Span  *span = &line->spans[s];
+        chtype attr = span_attr(span->type, line->type);
+        int    wlen = utf8_to_wide(span->text, (int)strlen(span->text),
+                                    wbuf, 4096);
+        for (int j = 0; j < wlen && idx < total; j++) {
+            chars[idx] = wbuf[j];
+            attrs[idx] = attr;
+            idx++;
+        }
+    }
+
+    *out_chars = chars;
+    *out_attrs = attrs;
+    return total;
+}
+
+/* ──────────────────────────────────────────────
+ * construir líneas visuales a partir de chars aplanados.
+ * con wrap_words=1 parte en límites de palabra (espacio);
+ * con wrap_words=0 parte por columna exacta (comportamiento clásico).
+ * retorna cantidad de líneas visuales, o -1 en error.
+ * el caller debe liberar *out_breaks.
+ * ────────────────────────────────────────────── */
+static int build_visual_lines(wchar_t *chars, int total, int avail_w,
+                               int wrap_words, int **out_breaks) {
+    if (total <= 0 || avail_w < 1) {
+        *out_breaks = NULL;
+        return (total <= 0) ? 0 : 1;
+    }
+
+    /* máximo posible: un char por línea */
+    int *breaks = malloc(sizeof(int) * (size_t)(total + 1));
+    if (!breaks) return -1;
+
+    int pos = 0, line_count = 0;
+
+    while (pos < total) {
+        breaks[line_count++] = pos;
+
+        int col = 0;
+        int last_space_pos = -1;
+        int line_end = pos;
+
+        while (line_end < total) {
+            int cw = wcwidth(chars[line_end]);
+            if (cw < 0) cw = 1;
+            if (col + cw > avail_w) break;
+            if (wrap_words && chars[line_end] == L' ')
+                last_space_pos = line_end;
+            col += cw;
+            line_end++;
+        }
+
+        /* word-wrap: si hay overflow a mitad de palabra, rebobinar
+           al último espacio encontrado en esta línea */
+        if (wrap_words && line_end < total && last_space_pos >= pos)
+            line_end = last_space_pos;
+
+        /* forzar avance si no cupo ni un carácter */
+        if (line_end == pos) line_end = pos + 1;
+
+        pos = line_end;
+
+        /* saltar el espacio que disparó el wrap (no se muestra
+           al final ni al principio de ninguna línea) */
+        if (wrap_words && pos < total && chars[pos] == L' ')
+            pos++;
+    }
+
+    *out_breaks = breaks;
+    return line_count;
+}
+
+/* ──────────────────────────────────────────────
  * cantidad de filas que ocupa la línea en pantalla
  * usa wcwidth para anchos reales (emoji=2, CJK=2)
  * ────────────────────────────────────────────── */
-static int line_wrapped_rows(ParsedLine *line, int avail_w) {
+static int line_wrapped_rows(ParsedLine *line, int avail_w,
+                              int wrap_words) {
     if (line->type == LINE_EMPTY) return 1;
 
     /* las filas de tabla de datos pueden ocupar múltiples
@@ -275,6 +384,25 @@ static int line_wrapped_rows(ParsedLine *line, int avail_w) {
         line->type == LINE_TABLE_BOTTOM)
         return 1;
 
+    /* ── word-wrap: usar líneas visuales con corte en espacios ── */
+    if (wrap_words) {
+        wchar_t *chars = NULL;
+        chtype  *attrs = NULL;
+        int total = flatten_spans(line, &chars, &attrs);
+        if (total > 0) {
+            int *breaks = NULL;
+            int rows = build_visual_lines(chars, total, avail_w, 1, &breaks);
+            free(chars);
+            free(attrs);
+            free(breaks);
+            return rows > 0 ? rows : 1;
+        }
+        free(chars);
+        free(attrs);
+        /* si flatten falló, seguir con char-wrap clásico */
+    }
+
+    /* ── char-wrap clásico (comportamiento original) ── */
     int col = 0, rows = 1;
     wchar_t wbuf[8192];
     for (int i = 0; i < line->span_count; i++) {
@@ -300,7 +428,7 @@ static int total_visual_rows(Renderer *r) {
     if (avail < 1) avail = 1;
     int total = 0;
     for (int i = 0; i < r->doc->count; i++)
-        total += line_wrapped_rows(&r->doc->lines[i], avail);
+        total += line_wrapped_rows(&r->doc->lines[i], avail, r->wrap_words);
     return total;
 }
 
@@ -629,7 +757,63 @@ static int render_source_line(Renderer *r, int line_idx,
         return 1;
     }
 
-    /* ── caminar spans como wide chars ── */
+    /* ── word-wrap: aplanar spans y partir en límites de palabra ── */
+    if (r->wrap_words) {
+        wchar_t *chars = NULL;
+        chtype  *attrs = NULL;
+        int total = flatten_spans(line, &chars, &attrs);
+
+        if (total > 0) {
+            int *breaks = NULL;
+            int nlines = build_visual_lines(chars, total, avail_w, 1, &breaks);
+
+            int used = 0;
+            for (int vl = 0; vl < nlines; vl++) {
+                int start = breaks[vl];
+                int end   = (vl + 1 < nlines) ? breaks[vl + 1] : total;
+
+                int row = screen_y + vl - skip_rows;
+                if (vl >= skip_rows && row >= 0 && row < r->content_h) {
+                    int sx = margin;
+                    int ci = start;
+                    while (ci < end) {
+                        /* agrupar chars consecutivos con mismo atributo */
+                        int run_end = ci + 1;
+                        while (run_end < end && attrs[run_end] == attrs[ci])
+                            run_end++;
+
+                        wmove(r->main_win, row, sx);
+                        wattron(r->main_win, attrs[ci]);
+                        waddnwstr(r->main_win, chars + ci, run_end - ci);
+                        wattroff(r->main_win, attrs[ci]);
+
+                        /* avanzar sx según ancho visual del grupo */
+                        for (int k = ci; k < run_end; k++) {
+                            int cw = wcwidth(chars[k]);
+                            sx += (cw < 0) ? 1 : cw;
+                        }
+                        ci = run_end;
+                    }
+                }
+                used = vl + 1 - skip_rows;
+            }
+
+            free(chars);
+            free(attrs);
+            free(breaks);
+
+            if (used < 0) used = 0;
+            if (screen_y + used > r->content_h)
+                used = r->content_h - screen_y;
+            return used;
+        }
+
+        free(chars);
+        free(attrs);
+        /* si flatten falló, continuar con char-wrap clásico */
+    }
+
+    /* ── char-wrap clásico: caminar spans como wide chars ── */
     int col      = 0;
     int wrap_row = 0;
     int used     = 0;
@@ -706,7 +890,7 @@ static void draw_status(Renderer *r) {
     int avail_w = r->term_w - (r->show_numbers ? 6 : 2);
     if (avail_w < 1) avail_w = 1;
     for (int i = 0; i < r->scroll_line && i < r->doc->count; i++)
-        cur += line_wrapped_rows(&r->doc->lines[i], avail_w);
+        cur += line_wrapped_rows(&r->doc->lines[i], avail_w, r->wrap_words);
     cur += r->scroll_skip;
     if (cur < 0) cur = 0;
 
@@ -737,7 +921,7 @@ Renderer *renderer_create(Document *doc, const char *filename) {
     r->doc          = doc;
     r->filename     = strdup(filename ? filename : "stdin");
     r->show_numbers = 0;
-    r->wrap_words   = 0;
+    r->wrap_words   = 1;
     r->theme_idx    = 0;
     r->scroll_line  = 0;
     r->scroll_skip  = 0;
@@ -801,7 +985,8 @@ void renderer_resize(Renderer *r) {
 
     /* ajustar scroll_skip a las nuevas dimensiones */
     while (r->scroll_line < r->doc->count) {
-        int rows = line_wrapped_rows(&r->doc->lines[r->scroll_line], avail);
+        int rows = line_wrapped_rows(&r->doc->lines[r->scroll_line], avail,
+                                      r->wrap_words);
         if (r->scroll_skip < rows) break;
         r->scroll_skip -= rows;
         r->scroll_line++;
@@ -854,7 +1039,8 @@ static int avail_width(Renderer *r) {
 static void scroll_down(Renderer *r, int rows) {
     int aw = avail_width(r);
     while (rows > 0 && r->scroll_line < r->doc->count) {
-        int lr = line_wrapped_rows(&r->doc->lines[r->scroll_line], aw);
+        int lr = line_wrapped_rows(&r->doc->lines[r->scroll_line], aw,
+                                   r->wrap_words);
         int left = lr - r->scroll_skip;
         if (rows < left) {
             r->scroll_skip += rows;
@@ -883,7 +1069,8 @@ static void scroll_up(Renderer *r, int rows) {
         r->scroll_skip = 0;
         if (r->scroll_line <= 0) return;
         r->scroll_line--;
-        r->scroll_skip = line_wrapped_rows(&r->doc->lines[r->scroll_line], aw);
+        r->scroll_skip = line_wrapped_rows(&r->doc->lines[r->scroll_line], aw,
+                                            r->wrap_words);
         if (r->scroll_skip > 0) r->scroll_skip--;
         if (rows > 0) rows--; /* ya retrocedimos una fila */
     }
