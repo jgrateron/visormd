@@ -1146,6 +1146,7 @@ Renderer *renderer_create(Document *doc, const char *filename) {
 
 void renderer_free(Renderer *r) {
     if (!r) return;
+    doc_free(r->doc);
     free(r->filename);
     delwin(r->main_win);
     delwin(r->status_win);

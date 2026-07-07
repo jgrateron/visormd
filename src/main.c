@@ -96,6 +96,7 @@ int main(int argc, char **argv) {
     if (cat_mode) {
         /* ── modo cat: volcar a stdout y salir ── */
         cat_render(doc);
+        doc_free(doc);
     } else {
         /* ── iniciar renderer ncurses ── */
         Renderer *renderer = renderer_create(doc, filename);
@@ -114,11 +115,9 @@ int main(int argc, char **argv) {
             if (!quit) renderer_draw(renderer);
         }
 
-        /* ── limpiar ── */
+        /* ── limpiar (renderer_free libera también el documento) ── */
         renderer_free(renderer);
     }
-
-    doc_free(doc);
 
     return 0;
 }
