@@ -15,6 +15,7 @@ A terminal-based interactive Markdown viewer written in C11 with ncursesw. It re
 - **UTF-8 support** — emoji, CJK characters, and accented text with correct column width (via `wcwidth`)
 - **8 color themes** — Default, Monochrome, Solarized Dark/Light, Nord, Gruvbox Dark, Dracula, One Dark
 - **Vim-like navigation** — `j`/`k`, `gg`/`G`, space/page-up/page-down
+- **Smart word-wrap** — words stay whole when wrapping to the next line (togglable with `w`)
 - **Responsive** — handles terminal resize, line wrapping, and proportional column scaling for wide tables
 
 ## Requirements
@@ -80,13 +81,13 @@ Without options, the program starts in interactive mode with ncurses.
 | `g` / Home | Go to top |
 | `G` / End | Go to bottom |
 | `n` | Toggle line numbers |
-| `w` | Toggle word wrap |
+| `w` | Toggle word-wrap (default: on, words stay whole) |
 | `F2` | Open theme selector |
 
 ### Quick test
 
 ```bash
-TERM=xterm-256color LANG=C.UTF-8 timeout 1 ./visormd test.md; echo "exit: $?"
+TERM=xterm-256color LANG=C.UTF-8 timeout 1 ./visormd test/test.md; echo "exit: $?"
 ```
 
 ## Architecture
