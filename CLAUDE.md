@@ -30,7 +30,7 @@ Test Markdown inputs (`test/*.md`) and their expected plain-text outputs (`test/
 To regenerate expected outputs after a rendering change:
 
 ```bash
-for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md; do
+for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md; do
     base="${f%.md}"
     TERM=xterm-256color LANG=C.UTF-8 ./visormd --cat "$f" > "${base}_expected.txt"
 done
@@ -47,6 +47,7 @@ done
 | `test_user.md` | Single standalone table with backtick-wrapped code in cells, long cell text wrapping across multiple visual lines |
 | `test_utf8.md` | Spanish accented characters (áéíóúñü), mixed with bold/italic/inline code/blockquote/fenced bash block, links with accents in URL, escaped heading |
 | `test_wide.md` | Table with very long cell content forcing multi-line wrapping per row, CJK/wide characters |
+| `test_lista.md` | Unordered list items with bold terms, inline code, and long wrapped lines |
 
 ## Architecture
 

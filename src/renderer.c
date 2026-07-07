@@ -262,14 +262,40 @@ static int flatten_spans(ParsedLine *line, wchar_t **out_chars,
 }
 
 /* ──────────────────────────────────────────────
+ * ancho visual de los marcadores de lista
+ * (SPAN_LIST_MARKER) de una línea.
+ * ────────────────────────────────────────────── */
+static int list_marker_width(ParsedLine *line) {
+    if (line->type != LINE_LIST_UNORDERED &&
+        line->type != LINE_LIST_ORDERED)
+        return 0;
+    int width = 0;
+    wchar_t wbuf[256];
+    for (int i = 0; i < line->span_count; i++) {
+        if (line->spans[i].type == SPAN_LIST_MARKER) {
+            int wlen = utf8_to_wide(line->spans[i].text,
+                                    (int)strlen(line->spans[i].text),
+                                    wbuf, 256);
+            for (int j = 0; j < wlen; j++) {
+                int cw = wcwidth(wbuf[j]);
+                width += (cw < 0) ? 1 : cw;
+            }
+        }
+    }
+    return width;
+}
+
+/* ──────────────────────────────────────────────
  * construir líneas visuales a partir de chars aplanados.
  * con wrap_words=1 parte en límites de palabra (espacio);
- * con wrap_words=0 parte por columna exacta (comportamiento clásico).
+ * con wrap_words=0 parte por columna exacta.
+ * cont_indent = sangría extra para líneas de continuación
+ *               (usado en ítems de lista).
  * retorna cantidad de líneas visuales, o -1 en error.
- * el caller debe liberar *out_breaks.
  * ────────────────────────────────────────────── */
 static int build_visual_lines(wchar_t *chars, int total, int avail_w,
-                               int wrap_words, int **out_breaks) {
+                               int wrap_words, int cont_indent,
+                               int **out_breaks) {
     if (total <= 0 || avail_w < 1) {
         *out_breaks = NULL;
         return (total <= 0) ? 0 : 1;
@@ -284,6 +310,11 @@ static int build_visual_lines(wchar_t *chars, int total, int avail_w,
     while (pos < total) {
         breaks[line_count++] = pos;
 
+        /* primera línea usa todo el ancho; las siguientes descuentan sangría */
+        int effective_w = (line_count == 1) ? avail_w
+                                            : avail_w - cont_indent;
+        if (effective_w < 1) effective_w = 1;
+
         int col = 0;
         int last_space_pos = -1;
         int line_end = pos;
@@ -291,7 +322,7 @@ static int build_visual_lines(wchar_t *chars, int total, int avail_w,
         while (line_end < total) {
             int cw = wcwidth(chars[line_end]);
             if (cw < 0) cw = 1;
-            if (col + cw > avail_w) break;
+            if (col + cw > effective_w) break;
             if (wrap_words && chars[line_end] == L' ')
                 last_space_pos = line_end;
             col += cw;
@@ -308,8 +339,7 @@ static int build_visual_lines(wchar_t *chars, int total, int avail_w,
 
         pos = line_end;
 
-        /* saltar el espacio que disparó el wrap (no se muestra
-           al final ni al principio de ninguna línea) */
+        /* saltar el espacio que disparó el wrap */
         if (wrap_words && pos < total && chars[pos] == L' ')
             pos++;
     }
@@ -384,7 +414,7 @@ static int line_wrapped_rows(ParsedLine *line, int avail_w,
                 if (total > 0) {
                     int *breaks = NULL;
                     int lines = build_visual_lines(chars, total, adj_w[c],
-                                                    1, &breaks);
+                                                    1, 0, &breaks);
                     if (lines > max_lines) max_lines = lines;
                     free(breaks);
                 }
@@ -421,7 +451,8 @@ static int line_wrapped_rows(ParsedLine *line, int avail_w,
         int total = flatten_spans(line, &chars, &attrs);
         if (total > 0) {
             int *breaks = NULL;
-            int rows = build_visual_lines(chars, total, avail_w, 1, &breaks);
+            int rows = build_visual_lines(chars, total, avail_w, 1,
+                                          list_marker_width(line), &breaks);
             free(chars);
             free(attrs);
             free(breaks);
@@ -433,7 +464,9 @@ static int line_wrapped_rows(ParsedLine *line, int avail_w,
     }
 
     /* ── char-wrap clásico (comportamiento original) ── */
+    int indent = list_marker_width(line);
     int col = 0, rows = 1;
+    int eff_w = avail_w;
     wchar_t wbuf[8192];
     for (int i = 0; i < line->span_count; i++) {
         int wlen = utf8_to_wide(line->spans[i].text,
@@ -442,7 +475,11 @@ static int line_wrapped_rows(ParsedLine *line, int avail_w,
         for (int j = 0; j < wlen; j++) {
             int cw = wcwidth(wbuf[j]);
             if (cw < 0) cw = 1;
-            if (col + cw > avail_w) { col = 0; rows++; }
+            if (col + cw > eff_w) {
+                col = indent;
+                eff_w = avail_w - indent;
+                rows++;
+            }
             col += cw;
         }
     }
@@ -671,7 +708,7 @@ static int render_source_line(Renderer *r, int line_idx,
                         int *breaks = NULL;
                         cell_lines[c] = build_visual_lines(
                             cell_chars[c], cell_total[c], adj_w[c],
-                            1, &breaks);
+                            1, 0, &breaks);
                         cell_breaks[c] = breaks;
                         if (cell_lines[c] < 1) cell_lines[c] = 1;
                     } else {
@@ -904,8 +941,10 @@ static int render_source_line(Renderer *r, int line_idx,
         int total = flatten_spans(line, &chars, &attrs);
 
         if (total > 0) {
+            int list_ind = list_marker_width(line);
             int *breaks = NULL;
-            int nlines = build_visual_lines(chars, total, avail_w, 1, &breaks);
+            int nlines = build_visual_lines(chars, total, avail_w, 1,
+                                            list_ind, &breaks);
 
             int used = 0;
             for (int vl = 0; vl < nlines; vl++) {
@@ -914,7 +953,8 @@ static int render_source_line(Renderer *r, int line_idx,
 
                 int row = screen_y + vl - skip_rows;
                 if (vl >= skip_rows && row >= 0 && row < r->content_h) {
-                    int sx = margin;
+                    /* líneas de continuación de lista llevan sangría */
+                    int sx = margin + ((vl > 0) ? list_ind : 0);
                     int ci = start;
                     while (ci < end) {
                         /* agrupar chars consecutivos con mismo atributo */
@@ -954,6 +994,7 @@ static int render_source_line(Renderer *r, int line_idx,
     }
 
     /* ── char-wrap clásico: caminar spans como wide chars ── */
+    int list_ind = list_marker_width(line);
     int col      = 0;
     int wrap_row = 0;
     int used     = 0;
@@ -967,11 +1008,17 @@ static int render_source_line(Renderer *r, int line_idx,
         int wi = 0;
 
         while (wi < wlen) {
-            int avail_cols = avail_w - col;
+            int eff_w = (wrap_row == 0) ? avail_w
+                                        : avail_w - list_ind;
+            if (eff_w < 1) eff_w = 1;
+            int avail_cols = eff_w - col;
             if (avail_cols <= 0) {
-                col = 0;
+                col = list_ind;
                 wrap_row++;
-                avail_cols = avail_w;
+                eff_w = avail_w - list_ind;
+                if (eff_w < 1) eff_w = 1;
+                avail_cols = eff_w - list_ind;
+                if (avail_cols < 0) avail_cols = 0;
             }
 
             /* contar cuántos wide chars caben por ancho real */
@@ -1004,8 +1051,8 @@ static int render_source_line(Renderer *r, int line_idx,
             wi  += seg_chars;
             col += seg_width;
 
-            if (col >= avail_w) {
-                col = 0;
+            if (col >= eff_w) {
+                col = list_ind;
                 wrap_row++;
             }
         }
