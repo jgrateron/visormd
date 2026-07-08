@@ -364,18 +364,35 @@ int config_load_theme(void) {
     return idx;
 }
 
+/* ── crear directorios recursivamente (como mkdir -p) ── */
+static int mkdir_p(const char *path, mode_t mode) {
+    char tmp[1024];
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    size_t len = strlen(tmp);
+    if (len > 0 && tmp[len - 1] == '/') tmp[len - 1] = '\0';
+
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            if (mkdir(tmp, mode) != 0 && errno != EEXIST) return -1;
+            *p = '/';
+        }
+    }
+    if (mkdir(tmp, mode) != 0 && errno != EEXIST) return -1;
+    return 0;
+}
+
 int config_save_theme(const char *theme_id) {
     char path[1024];
     if (config_get_path(path, sizeof(path)) != 0) return -1;
 
-    /* crear directorio si no existe */
+    /* crear directorio si no existe (incluye padres) */
     char dir[1024];
     snprintf(dir, sizeof(dir), "%s", path);
     char *slash = strrchr(dir, '/');
     if (slash) {
         *slash = '\0';
-        /* intentar crear, ignorar si ya existe */
-        if (mkdir(dir, 0755) != 0 && errno != EEXIST) return -1;
+        if (mkdir_p(dir, 0755) != 0) return -1;
     }
 
     FILE *fp = fopen(path, "w");
