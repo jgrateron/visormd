@@ -6,6 +6,11 @@
 #include <string.h>
 #include <wchar.h>
 
+/* ── ncurses < 6.0 no define A_ITALIC; usar subrayado como fallback ── */
+#ifndef A_ITALIC
+#define A_ITALIC A_UNDERLINE
+#endif
+
 /* ──────────────────────────────────────────────
  * convertir UTF-8 → wchar_t[] (requiere locale UTF-8)
  * retorna cantidad de wide chars
