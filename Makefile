@@ -1,7 +1,10 @@
 CC      := gcc
 CFLAGS  := -Wall -Wextra -std=c11 -D_GNU_SOURCE -O2 -g
-LDFLAGS := -lncursesw
-LDFLAGS_STATIC := -static -lncursesw -ltinfo
+NCURSES_CFLAGS := $(shell pkg-config --cflags ncursesw 2>/dev/null)
+NCURSES_LIBS   := $(shell pkg-config --libs   ncursesw 2>/dev/null || echo "-lncursesw")
+CFLAGS  += $(NCURSES_CFLAGS)
+LDFLAGS := $(NCURSES_LIBS)
+LDFLAGS_STATIC := -static $(NCURSES_LIBS) -ltinfo
 
 SRCDIR  := src
 OBJDIR  := obj
