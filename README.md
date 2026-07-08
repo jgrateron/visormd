@@ -5,6 +5,9 @@ A terminal-based interactive Markdown viewer written in C11 with ncursesw. It re
 ![C11](https://img.shields.io/badge/language-C11-blue)
 ![ncursesw](https://img.shields.io/badge/library-ncursesw-green)
 
+![visorMD en acción](resources/image1.png)
+*visorMD showing raw Markdown source (left) alongside its rendered output (right)*
+
 ## Features
 
 - **Headings** (H1–H6) with distinct colors
