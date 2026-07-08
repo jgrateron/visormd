@@ -27,9 +27,10 @@
 #define CP_BASH_STRING   21
 #define CP_BASH_VARIABLE 22
 #define CP_BASH_KEYWORD  23
+#define CP_LINE_NUMBER   24
 
 #define CP_FIRST  1
-#define CP_COUNT  24   /* índices 1..23, posición 0 sin usar */
+#define CP_COUNT  25   /* índices 1..24, posición 0 sin usar */
 
 /* ── un par foreground / background ── */
 typedef struct {

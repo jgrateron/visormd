@@ -44,6 +44,7 @@ static const Theme themes[] = {
             [CP_BASH_STRING]  = { COLOR_YELLOW,  -1 },
             [CP_BASH_VARIABLE]= { COLOR_CYAN,    -1 },
             [CP_BASH_KEYWORD] = { COLOR_MAGENTA, -1 },
+            [CP_LINE_NUMBER]  = { COLOR_WHITE,   -1 },
         },
     },
 
@@ -75,6 +76,7 @@ static const Theme themes[] = {
             [CP_BASH_STRING]  = { COLOR_WHITE,   -1 },
             [CP_BASH_VARIABLE]= { COLOR_WHITE,   -1 },
             [CP_BASH_KEYWORD] = { COLOR_WHITE,   -1 },
+            [CP_LINE_NUMBER]  = { COLOR_WHITE,   -1 },
         },
     },
 
@@ -106,6 +108,7 @@ static const Theme themes[] = {
             [CP_BASH_STRING]  = { COLOR_YELLOW,  -1 },
             [CP_BASH_VARIABLE]= { COLOR_CYAN,    -1 },
             [CP_BASH_KEYWORD] = { COLOR_MAGENTA, -1 },
+            [CP_LINE_NUMBER]  = { COLOR_WHITE,   -1 },
         },
     },
 
@@ -137,6 +140,7 @@ static const Theme themes[] = {
             [CP_BASH_STRING]  = { COLOR_YELLOW,  -1 },
             [CP_BASH_VARIABLE]= { COLOR_BLUE,    -1 },
             [CP_BASH_KEYWORD] = { COLOR_MAGENTA, -1 },
+            [CP_LINE_NUMBER]  = { COLOR_BLACK,   -1 },
         },
     },
 
@@ -168,6 +172,7 @@ static const Theme themes[] = {
             [CP_BASH_STRING]  = { COLOR_YELLOW,  -1 },
             [CP_BASH_VARIABLE]= { COLOR_CYAN,    -1 },
             [CP_BASH_KEYWORD] = { COLOR_MAGENTA, -1 },
+            [CP_LINE_NUMBER]  = { COLOR_WHITE,   -1 },
         },
     },
 
@@ -199,6 +204,7 @@ static const Theme themes[] = {
             [CP_BASH_STRING]  = { COLOR_YELLOW,  -1 },
             [CP_BASH_VARIABLE]= { COLOR_CYAN,    -1 },
             [CP_BASH_KEYWORD] = { COLOR_MAGENTA, -1 },
+            [CP_LINE_NUMBER]  = { COLOR_WHITE,   -1 },
         },
     },
 
@@ -230,6 +236,7 @@ static const Theme themes[] = {
             [CP_BASH_STRING]  = { COLOR_YELLOW,  -1 },
             [CP_BASH_VARIABLE]= { COLOR_CYAN,    -1 },
             [CP_BASH_KEYWORD] = { COLOR_MAGENTA, -1 },
+            [CP_LINE_NUMBER]  = { COLOR_WHITE,   -1 },
         },
     },
 
@@ -261,6 +268,7 @@ static const Theme themes[] = {
             [CP_BASH_STRING]  = { COLOR_YELLOW,  -1 },
             [CP_BASH_VARIABLE]= { COLOR_CYAN,    -1 },
             [CP_BASH_KEYWORD] = { COLOR_MAGENTA, -1 },
+            [CP_LINE_NUMBER]  = { COLOR_WHITE,   -1 },
         },
     },
 };

@@ -287,6 +287,25 @@ static int list_marker_width(ParsedLine *line) {
 }
 
 /* ──────────────────────────────────────────────
+ * helpers para números de línea
+ * ────────────────────────────────────────────── */
+static void draw_line_number(Renderer *r, int line_idx, int screen_y) {
+    if (!r->show_numbers) return;
+    if (screen_y < 0 || screen_y >= r->content_h) return;
+    wmove(r->main_win, screen_y, 0);
+    wattron(r->main_win, COLOR_PAIR(CP_LINE_NUMBER) | A_DIM);
+    wprintw(r->main_win, "%5d ", line_idx + 1);
+    wattroff(r->main_win, COLOR_PAIR(CP_LINE_NUMBER) | A_DIM);
+}
+
+static void clear_line_number(Renderer *r, int screen_y) {
+    if (!r->show_numbers) return;
+    if (screen_y < 0 || screen_y >= r->content_h) return;
+    wmove(r->main_win, screen_y, 0);
+    waddnstr(r->main_win, "      ", 6);
+}
+
+/* ──────────────────────────────────────────────
  * construir líneas visuales a partir de chars aplanados.
  * con wrap_words=1 parte en límites de palabra (espacio);
  * con wrap_words=0 parte por columna exacta.
@@ -516,7 +535,8 @@ static int render_source_line(Renderer *r, int line_idx,
     /* ── línea vacía ── */
     if (line->type == LINE_EMPTY) {
         if (skip_rows <= 0 && screen_y >= 0) {
-            wmove(r->main_win, screen_y, 0);
+            draw_line_number(r, line_idx, screen_y);
+            wmove(r->main_win, screen_y, margin);
             wclrtoeol(r->main_win);
         }
         return 1;
@@ -525,6 +545,7 @@ static int render_source_line(Renderer *r, int line_idx,
     /* ── regla horizontal ── */
     if (line->type == LINE_HORIZONTAL_RULE) {
         if (skip_rows <= 0 && screen_y >= 0 && screen_y < r->content_h) {
+            draw_line_number(r, line_idx, screen_y);
             wmove(r->main_win, screen_y, margin);
             for (int x = 0; x < avail_w; x++)
                 waddch(r->main_win, ACS_HLINE | COLOR_PAIR(CP_HR) | A_DIM);
@@ -540,6 +561,8 @@ static int render_source_line(Renderer *r, int line_idx,
 
         if (skip_rows > 0) return 1;
         if (screen_y < 0 || screen_y >= r->content_h) return 1;
+
+        draw_line_number(r, line_idx, screen_y);
 
         int ncols = line->table_cols;
         if (ncols <= 0 || !line->table_widths) return 1;
@@ -754,6 +777,12 @@ static int render_source_line(Renderer *r, int line_idx,
         int sy = screen_y;
         for (int wr = start_wr; wr < max_lines && sy < r->content_h; wr++) {
 
+            /* número de línea solo en la primera sub-fila */
+            if (wr == 0)
+                draw_line_number(r, line_idx, sy);
+            else
+                clear_line_number(r, sy);
+
             int sx = margin;
 
             /* borde izquierdo */
@@ -925,6 +954,7 @@ static int render_source_line(Renderer *r, int line_idx,
     if (line->type == LINE_TABLE_SEP) {
         if (skip_rows > 0) return 1;
         if (screen_y < 0 || screen_y >= r->content_h) return 1;
+        draw_line_number(r, line_idx, screen_y);
         wmove(r->main_win, screen_y, margin);
         for (int x = 0; x < avail_w && x + margin < r->term_w; x++)
             waddch(r->main_win, ACS_HLINE | COLOR_PAIR(CP_TABLE_BORDER));
@@ -954,6 +984,12 @@ static int render_source_line(Renderer *r, int line_idx,
 
                 int row = screen_y + vl - skip_rows;
                 if (vl >= skip_rows && row >= 0 && row < r->content_h) {
+                    /* número de línea solo en la primera línea visual */
+                    if (vl == 0)
+                        draw_line_number(r, line_idx, row);
+                    else
+                        clear_line_number(r, row);
+
                     /* líneas de continuación de lista llevan sangría */
                     int sx = margin + ((vl > 0) ? list_ind : 0);
                     int ci = start;
@@ -1001,6 +1037,10 @@ static int render_source_line(Renderer *r, int line_idx,
     int used     = 0;
     wchar_t wbuf[16384];
 
+    /* número de línea en la primera fila */
+    if (skip_rows <= 0)
+        draw_line_number(r, line_idx, screen_y);
+
     for (int s = 0; s < line->span_count; s++) {
         Span  *span = &line->spans[s];
         chtype attr = span_attr(span->type, line->type);
@@ -1016,6 +1056,8 @@ static int render_source_line(Renderer *r, int line_idx,
             if (avail_cols <= 0) {
                 col = list_ind;
                 wrap_row++;
+                if (wrap_row >= skip_rows)
+                    clear_line_number(r, screen_y + wrap_row - skip_rows);
                 eff_w = avail_w - list_ind;
                 if (eff_w < 1) eff_w = 1;
                 avail_cols = eff_w - list_ind;
@@ -1055,6 +1097,8 @@ static int render_source_line(Renderer *r, int line_idx,
             if (col >= eff_w) {
                 col = list_ind;
                 wrap_row++;
+                if (wrap_row >= skip_rows)
+                    clear_line_number(r, screen_y + wrap_row - skip_rows);
             }
         }
     }
