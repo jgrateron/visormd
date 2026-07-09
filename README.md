@@ -62,7 +62,7 @@ The binary is a standalone executable with no runtime dependencies beyond `libnc
 ## Usage
 
 ```bash
-visormd [OPCIONES] <file.md>
+visormd [OPCIONES] [archivo.md]
 ```
 
 | Option | Description |
@@ -71,6 +71,19 @@ visormd [OPCIONES] <file.md>
 | `-h`, `--help` | Show the help message |
 
 Without options, the program starts in interactive mode with ncurses.
+
+### Stdin support
+
+When content is piped or redirected to stdin, **cat mode is activated automatically** — no need for `-c`/`--cat`:
+
+```bash
+visormd < README.md              # redirect → cat automático
+cat README.md | visormd          # pipe → cat automático
+echo "**bold**" | visormd        # texto desde echo
+curl -s https://example.com/doc.md | visormd   # desde URL
+```
+
+The program detects non-TTY stdin via `isatty(STDIN_FILENO)` and switches to cat mode transparently. You can still use `-c`/`--cat` explicitly if preferred.
 
 ### Keybindings
 
@@ -97,16 +110,16 @@ TERM=xterm-256color LANG=C.UTF-8 timeout 1 ./visormd test/test.md; echo "exit: $
 ## Architecture
 
 ```
-File → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) → Renderer (ncurses)
-                                                                   → cat_renderer (stdout + ANSI)
+File / stdin → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) → Renderer (ncurses)
+                                                                              → cat_renderer (stdout + ANSI)
 ```
 
-- **`src/buffer.c`** — Reads a file into a dynamic array of raw UTF-8 strings.
+- **`src/buffer.c`** — Reads a file or stdin into a dynamic array of raw UTF-8 strings (`buffer_load_file` / `buffer_load_stdin`).
 - **`src/parser.c`** — Parses Markdown into a `Document` tree: classifies line types, extracts inline spans (`**bold**`/`__bold__`, `*italic*`/`_italic_`, code, links), parses nested blockquotes and table blocks with column alignment.
 - **`src/renderer.c`** — ncursesw interactive viewer: renders spans with color attributes, handles line wrapping, scroll state, terminal resize, and the theme selector overlay.
 - **`src/cat_renderer.c`** — Non-interactive stdout renderer used by `--cat`/`-c`: iterates the parsed document and emits plain text with ANSI escape codes (disabled when stdout is not a TTY).
 - **`src/theme.c`** — 8 named color palettes with config persistence in `$HOME/.config/visormd/config` (respects `$XDG_CONFIG_HOME`).
-- **`src/main.c`** — Entry point: argument parsing (filename, `-c`/`--cat`, `-h`), locale setup, wires the pipeline, runs either the cat renderer or the interactive loop.
+- **`src/main.c`** — Entry point: argument parsing (filename, `-c`/`--cat`, `-h`), locale setup, auto-detects stdin pipe/redirect via `isatty()`, wires the pipeline, runs either the cat renderer or the interactive loop.
 
 ## Configuration
 

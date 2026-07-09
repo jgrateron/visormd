@@ -58,13 +58,13 @@ VisorMD is a terminal-based interactive Markdown viewer, written in C11 with ncu
 ### Data flow (pipeline)
 
 ```
-File → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) → Renderer (ncurses)
-                                                                   → cat_renderer (stdout + ANSI)
+File / stdin → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) → Renderer (ncurses)
+                                                                            → cat_renderer (stdout + ANSI)
 ```
 
 The default mode is interactive (ncurses). With `-c`/`--cat`, the pipeline branches to `cat_renderer` which dumps the document to stdout with ANSI escape codes and exits immediately — no ncurses dependency in that path.
 
-1. **`src/buffer.c`** — `TextBuffer`: reads a file into a dynamic array of raw UTF-8 strings (one per line). Owns the file I/O and is discarded after parsing.
+1. **`src/buffer.c`** — `TextBuffer`: reads a file (`buffer_load_file`) or stdin (`buffer_load_stdin`) into a dynamic array of raw UTF-8 strings (one per line). Owns the I/O and is discarded after parsing.
 
 2. **`src/parser.c`** — Converts raw lines into a `Document` tree:
    - **Line-level** (`detect_line_type`): classifies each line as a heading (H1–H6), code block fence/content, horizontal rule, blockquote, unordered/ordered list, empty line, or paragraph. Handles code block state tracking across lines.
@@ -91,7 +91,7 @@ The default mode is interactive (ncurses). With `-c`/`--cat`, the pipeline branc
    - Config I/O: reads/writes `theme=<id>` in `$HOME/.config/visormd/config` (with `$XDG_CONFIG_HOME` support).
    - Theme selector overlay (triggered by F2) is implemented as a static function in `renderer.c` since it needs intimate access to ncurses windows.
 
-6. **`src/main.c`** — Entry point: argument parsing (`-c`/`--cat` for stdout dump, `-h` for help, or a single filename), locale setup (tries `""`, `C.UTF-8`, `en_US.UTF-8` in that order). When `cat_mode` is set, calls `cat_render()` and exits; otherwise wires the pipeline through the ncurses renderer and runs the input loop until `q`.
+6. **`src/main.c`** — Entry point: argument parsing (`-c`/`--cat` for stdout dump, `-h` for help, or a single filename), locale setup (tries `""`, `C.UTF-8`, `en_US.UTF-8` in that order). Auto-detects non-TTY stdin via `isatty(STDIN_FILENO)` and switches to cat mode transparently — so `cat file.md | visormd` works without `-c`. When `cat_mode` is set, calls `cat_render()` and exits; otherwise wires the pipeline through the ncurses renderer and runs the input loop until `q`.
 
 ### Keybindings (hardcoded in `renderer_handle_input`)
 
