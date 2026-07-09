@@ -52,3 +52,25 @@ int buffer_load_file(TextBuffer *buf, const char *filename) {
     fclose(fp);
     return 0;
 }
+
+int buffer_load_stdin(TextBuffer *buf) {
+    char line_buf[LINE_BUF_SIZE];
+
+    while (fgets(line_buf, sizeof(line_buf), stdin)) {
+        /* quitar newline y carriage return */
+        size_t len = strlen(line_buf);
+        while (len > 0 &&
+               (line_buf[len - 1] == '\n' || line_buf[len - 1] == '\r'))
+            line_buf[--len] = '\0';
+
+        /* expandir capacidad si es necesario */
+        if (buf->count >= buf->capacity) {
+            buf->capacity *= 2;
+            char **tmp = realloc(buf->lines, sizeof(char *) * buf->capacity);
+            if (!tmp) return -1;
+            buf->lines = tmp;
+        }
+        buf->lines[buf->count++] = strdup(line_buf);
+    }
+    return 0;
+}

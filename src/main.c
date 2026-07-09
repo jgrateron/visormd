@@ -6,10 +6,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static void usage(const char *prog) {
     fprintf(stderr,
-            "Uso: %s [OPCIONES] <archivo.md>\n"
+            "Uso: %s [OPCIONES] [archivo.md]\n"
             "\n"
             "Visor interactivo de Markdown para terminal.\n"
             "\n"
@@ -32,8 +33,10 @@ static void usage(const char *prog) {
             "\n"
             "Ejemplos:\n"
             "  %s README.md           # modo interactivo\n"
-            "  %s --cat README.md     # volcar a consola\n",
-            prog, prog, prog);
+            "  %s --cat README.md     # volcar a consola\n"
+            "  %s < README.md         # stdin → cat automático\n"
+            "  cat README.md | %s     # pipe → cat automático\n",
+            prog, prog, prog, prog, prog);
 }
 
 int main(int argc, char **argv) {
@@ -58,7 +61,11 @@ int main(int argc, char **argv) {
         filename = argv[i];
     }
 
-    if (!filename) {
+    /* si no hay archivo y stdin es un pipe/redirect → modo cat automático */
+    if (!filename && !isatty(STDIN_FILENO))
+        cat_mode = 1;
+
+    if (!filename && !cat_mode) {
         usage(argv[0]);
         return 1;
     }
@@ -70,17 +77,26 @@ int main(int argc, char **argv) {
             setlocale(LC_ALL, "en_US.UTF-8");
     }
 
-    /* ── leer archivo ── */
+    /* ── leer archivo o stdin ── */
     TextBuffer *buf = buffer_create();
     if (!buf) {
         fprintf(stderr, "%s: error de memoria\n", argv[0]);
         return 1;
     }
 
-    if (buffer_load_file(buf, filename) != 0) {
-        fprintf(stderr, "%s: no se pudo leer '%s'\n", argv[0], filename);
-        buffer_free(buf);
-        return 1;
+    if (filename) {
+        if (buffer_load_file(buf, filename) != 0) {
+            fprintf(stderr, "%s: no se pudo leer '%s'\n", argv[0], filename);
+            buffer_free(buf);
+            return 1;
+        }
+    } else {
+        /* leer desde stdin (ya sabemos que es pipe/redirect) */
+        if (buffer_load_stdin(buf) != 0) {
+            fprintf(stderr, "%s: error al leer stdin\n", argv[0]);
+            buffer_free(buf);
+            return 1;
+        }
     }
 
     /* ── parsear markdown ── */
