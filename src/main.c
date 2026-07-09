@@ -32,10 +32,10 @@ static void usage(const char *prog) {
             "  F2        Seleccionar tema de colores\n"
             "\n"
             "Ejemplos:\n"
-            "  %s README.md           # modo interactivo\n"
-            "  %s --cat README.md     # volcar a consola\n"
-            "  %s < README.md         # stdin → cat automático\n"
-            "  cat README.md | %s     # pipe → cat automático\n",
+            "  %s README.md               # modo interactivo\n"
+            "  %s -c README.md            # volcar a consola\n"
+            "  cat README.md | %s         # pipe → interactivo\n"
+            "  cat README.md | %s -c      # pipe → volcar a consola\n",
             prog, prog, prog, prog, prog);
 }
 
@@ -61,11 +61,8 @@ int main(int argc, char **argv) {
         filename = argv[i];
     }
 
-    /* si no hay archivo y stdin es un pipe/redirect → modo cat automático */
-    if (!filename && !isatty(STDIN_FILENO))
-        cat_mode = 1;
-
-    if (!filename && !cat_mode) {
+    if (!filename && isatty(STDIN_FILENO)) {
+        /* sin archivo, sin pipe → nada que mostrar */
         usage(argv[0]);
         return 1;
     }
@@ -91,7 +88,7 @@ int main(int argc, char **argv) {
             return 1;
         }
     } else {
-        /* leer desde stdin (ya sabemos que es pipe/redirect) */
+        /* leer desde stdin (pipe/redirect) */
         if (buffer_load_stdin(buf) != 0) {
             fprintf(stderr, "%s: error al leer stdin\n", argv[0]);
             buffer_free(buf);
@@ -114,6 +111,18 @@ int main(int argc, char **argv) {
         cat_render(doc);
         doc_free(doc);
     } else {
+        /* ── si leímos de pipe, reconectar stdin a /dev/tty ── */
+        if (!isatty(STDIN_FILENO)) {
+            if (!freopen("/dev/tty", "r", stdin)) {
+                fprintf(stderr,
+                        "%s: no se puede acceder al terminal para modo interactivo.\n"
+                        "Usa -c/--cat para volcar a stdout.\n",
+                        argv[0]);
+                doc_free(doc);
+                return 1;
+            }
+        }
+
         /* ── iniciar renderer ncurses ── */
         Renderer *renderer = renderer_create(doc, filename);
         if (!renderer) {

@@ -62,7 +62,7 @@ File / stdin → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) �
                                                                             → cat_renderer (stdout + ANSI)
 ```
 
-The default mode is interactive (ncurses). With `-c`/`--cat`, the pipeline branches to `cat_renderer` which dumps the document to stdout with ANSI escape codes and exits immediately — no ncurses dependency in that path.
+The default mode is interactive (ncurses), even when reading from a pipe/redirect (stdin is reopened from `/dev/tty` for keyboard input). With `-c`/`--cat`, the pipeline branches to `cat_renderer` which dumps the document to stdout with ANSI escape codes and exits immediately — no ncurses dependency in that path.
 
 1. **`src/buffer.c`** — `TextBuffer`: reads a file (`buffer_load_file`) or stdin (`buffer_load_stdin`) into a dynamic array of raw UTF-8 strings (one per line). Owns the I/O and is discarded after parsing.
 
@@ -87,11 +87,11 @@ The default mode is interactive (ncurses). With `-c`/`--cat`, the pipeline branc
    - Does not depend on ncurses; only the parser, `<stdio.h>`, `<wchar.h>`, and `<sys/ioctl.h>`.
 
 5. **`src/theme.c`** — Color theme system:
-   - Defines 8 named theme palettes as `static const Theme` structs, each specifying fg/bg for all 16 color pairs.
+   - Defines 9 named theme palettes as `static const Theme` structs, each specifying fg/bg for all 24 color pairs.
    - Config I/O: reads/writes `theme=<id>` in `$HOME/.config/visormd/config` (with `$XDG_CONFIG_HOME` support).
    - Theme selector overlay (triggered by F2) is implemented as a static function in `renderer.c` since it needs intimate access to ncurses windows.
 
-6. **`src/main.c`** — Entry point: argument parsing (`-c`/`--cat` for stdout dump, `-h` for help, or a single filename), locale setup (tries `""`, `C.UTF-8`, `en_US.UTF-8` in that order). Auto-detects non-TTY stdin via `isatty(STDIN_FILENO)` and switches to cat mode transparently — so `cat file.md | visormd` works without `-c`. When `cat_mode` is set, calls `cat_render()` and exits; otherwise wires the pipeline through the ncurses renderer and runs the input loop until `q`.
+6. **`src/main.c`** — Entry point: argument parsing (`-c`/`--cat` for stdout dump, `-h` for help, or a single filename), locale setup (tries `""`, `C.UTF-8`, `en_US.UTF-8` in that order). When no filename is given, reads from stdin (pipe/redirect); for interactive mode, reopens `/dev/tty` so ncurses can read keyboard input. Calls `cat_render()` and exits in cat mode; otherwise wires the pipeline through the ncurses renderer and runs the input loop until `q`.
 
 ### Keybindings (hardcoded in `renderer_handle_input`)
 
@@ -110,7 +110,7 @@ The default mode is interactive (ncurses). With `-c`/`--cat`, the pipeline branc
 
 ### Color themes
 
-8 themes are defined in `src/theme.c`: Default, Monochrome, Solarized Dark, Solarized Light, Nord, Gruvbox Dark, Dracula, One Dark. The selected theme is persisted to `$HOME/.config/visormd/config` (respects `$XDG_CONFIG_HOME`). Color pair indices are shared between `theme.h` (macros) and `renderer.c`.
+9 themes are defined in `src/theme.c`: Default, Monochrome, Solarized Dark, Solarized Light, Nord, Gruvbox Dark, One Light, Dracula, One Dark. The selected theme is persisted to `$HOME/.config/visormd/config` (respects `$XDG_CONFIG_HOME`). Color pair indices are shared between `theme.h` (macros) and `renderer.c`.
 
 ### Language & locale
 

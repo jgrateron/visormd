@@ -8,7 +8,7 @@
 #include <sys/types.h>
 
 /* ══════════════════════════════════════════════════════════════
- * paletas de colores (8 temas)
+ * paletas de colores (9 temas)
  *
  * Cada tema define 16 pares (fg, bg).  bg = -1 significa
  * "usar color de fondo por defecto del terminal".
@@ -240,7 +240,39 @@ static const Theme themes[] = {
         },
     },
 
-    /* ── 7: One Dark ── */
+    /* ── 7: One Light (complemento de One Dark para fondos blancos) ── */
+    {
+        .id   = "one-light",
+        .name = "One Light",
+        .pairs = {
+            [CP_DEFAULT]      = { COLOR_BLACK,   -1 },
+            [CP_HEADING_1]    = { COLOR_RED,     -1 },
+            [CP_HEADING_2]    = { COLOR_BLUE,    -1 },
+            [CP_HEADING_3]    = { COLOR_GREEN,   -1 },
+            [CP_HEADING_4]    = { COLOR_CYAN,    -1 },
+            [CP_HEADING_5]    = { COLOR_MAGENTA, -1 },
+            [CP_HEADING_6]    = { COLOR_RED,     -1 },
+            [CP_BOLD]         = { COLOR_BLACK,   -1 },
+            [CP_ITALIC]       = { COLOR_BLACK,   -1 },
+            [CP_CODE]         = { COLOR_MAGENTA, -1 },
+            [CP_CODE_BLOCK]   = { COLOR_BLACK,   COLOR_WHITE },
+            [CP_BLOCKQUOTE]   = { COLOR_BLUE,    -1 },
+            [CP_LIST_MARKER]  = { COLOR_BLUE,    -1 },
+            [CP_LINK]         = { COLOR_BLUE,    -1 },
+            [CP_HR]           = { COLOR_BLACK,   -1 },
+            [CP_STATUSBAR]    = { COLOR_WHITE,   COLOR_BLACK },
+            [CP_TABLE_BORDER] = { COLOR_BLACK,   -1 },
+            [CP_TABLE_HEADER] = { COLOR_BLACK,   -1 },
+            [CP_HIGHLIGHT]    = { COLOR_MAGENTA, -1 },
+            [CP_BASH_COMMAND] = { COLOR_BLUE,    -1 },
+            [CP_BASH_STRING]  = { COLOR_MAGENTA, -1 },
+            [CP_BASH_VARIABLE]= { COLOR_CYAN,    -1 },
+            [CP_BASH_KEYWORD] = { COLOR_RED,     -1 },
+            [CP_LINE_NUMBER]  = { COLOR_BLACK,   -1 },
+        },
+    },
+
+    /* ── 8: One Dark ── */
     {
         .id   = "one-dark",
         .name = "One Dark",
