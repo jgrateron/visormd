@@ -101,6 +101,7 @@ When stdin is a pipe and interactive mode is used, the program reopens `/dev/tty
 | `n` | Toggle line numbers |
 | `w` | Toggle word-wrap (default: on, words stay whole) |
 | `F2` | Open theme selector |
+| `F4` | Toggle rendered view / raw Markdown source |
 
 ### Quick test
 
