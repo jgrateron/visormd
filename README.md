@@ -13,7 +13,7 @@ A terminal-based interactive Markdown viewer written in C11 with ncursesw. It re
 - **Headings** (H1–H6) with distinct colors
 - **Inline formatting** — bold (`**text**` / `__text__`), italic (`*text*` / `_text_`), `code`, and [links](https://example.com)
 - **Tables** with box-drawing borders (`┌┬┐├┼┤└┴┘`), column alignment (`:---`, `:---:`, `---:`), and inline formatting inside cells
-- **Code blocks** (fenced with ` ``` ` or `~~~`)
+- **Code blocks** (fenced with ` ``` ` or `~~~`) with syntax highlighting for C, C++, Java, JavaScript, TypeScript, and Bash
 - **Blockquotes** (with nested `>>`, `>>>` support), horizontal rules, unordered and ordered lists
 - **UTF-8 support** — emoji, CJK characters, and accented text with correct column width (via `wcwidth`)
 - **9 color themes** — Default, Monochrome, Solarized Dark/Light, Nord, Gruvbox Dark, Dracula, One Light (white background), One Dark
@@ -119,6 +119,7 @@ File / stdin → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) �
 - **`src/parser.c`** — Parses Markdown into a `Document` tree: classifies line types, extracts inline spans (`**bold**`/`__bold__`, `*italic*`/`_italic_`, code, links), parses nested blockquotes and table blocks with column alignment.
 - **`src/renderer.c`** — ncursesw interactive viewer: renders spans with color attributes, handles line wrapping, scroll state, terminal resize, and the theme selector overlay.
 - **`src/cat_renderer.c`** — Non-interactive stdout renderer used by `--cat`/`-c`: iterates the parsed document and emits plain text with ANSI escape codes (disabled when stdout is not a TTY).
+- **`src/highlight.c`** — Syntax highlighting engine for fenced code blocks. Maps language identifiers (`c`, `cpp`, `java`, `javascript`, `js`, `ts`) to keyword/type lists and tokenizer rules. Produces distinct `SPAN_KW_*` spans for keywords, types, strings, comments, numbers, and preprocessor directives. Tracks multi-line comment state across lines.
 - **`src/theme.c`** — 9 named color palettes with config persistence in `$HOME/.config/visormd/config` (respects `$XDG_CONFIG_HOME`).
 - **`src/main.c`** — Entry point: argument parsing (filename, `-c`/`--cat`, `-h`), locale setup, auto-detects stdin pipe/redirect via `isatty()`, wires the pipeline, runs either the cat renderer or the interactive loop.
 
@@ -175,8 +176,6 @@ Ideas for future improvements, roughly ordered by impact.
 - **More light-background themes** — Paper, GitHub Light, Zen. The One Light theme already provides a solid base; adding variants is straightforward palette tweaking.
 
 ### Low priority
-
-- **Multi-language syntax highlighting** — the parser currently only colors `bash` fenced blocks. Extend to `python`, `c`, `js`, `rust`, `json`, `yaml` with simple keyword-matching rules (no full AST needed for a terminal viewer).
 
 - **Presentation mode** — `P` to enter slideshow mode where each H1/H2 becomes a full-screen slide centered vertically. `j`/`k` to navigate slides.
 
