@@ -1,10 +1,22 @@
 #include "renderer.h"
 #include "theme.h"
 #include "buffer.h"
+#include <math.h>
 #include <ncurses.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#ifndef GIT_AUTHOR
+#define GIT_AUTHOR "desconocido"
+#endif
+#ifndef GIT_DATE
+#define GIT_DATE "desconocida"
+#endif
 
 /* ── ncurses < 6.0 no define A_ITALIC; usar subrayado como fallback ── */
 #ifndef A_ITALIC
@@ -1261,7 +1273,7 @@ static void draw_status(Renderer *r) {
 
     mvwprintw(r->status_win, 0, 0,
               " visormd  %s  L%d/%d  %d%%  %s  [q]uit [r]eload [arrows/jk] "
-              "[PgUp/PgDn] [g/G] [n]ums [w]rap [F2]tema",
+              "[PgUp/PgDn] [g/G] [n]ums [w]rap [F1]acerca [F2]tema",
               show,
               r->scroll_line + 1, line_count,
               pct, mode_str);
@@ -1411,6 +1423,7 @@ void renderer_draw(Renderer *r) {
  * ────────────────────────────────────────────── */
 
 static void theme_selector_show(Renderer *r);
+static void about_show(Renderer *r);
 
 static int avail_width(Renderer *r) {
     int m = r->show_numbers ? 6 : 2;
@@ -1610,6 +1623,10 @@ int renderer_handle_input(Renderer *r, int ch) {
         renderer_resize(r);
         break;
 
+    case KEY_F(1):
+        about_show(r);
+        break;
+
     case KEY_F(2):
         theme_selector_show(r);
         break;
@@ -1724,6 +1741,207 @@ static void theme_selector_show(Renderer *r) {
             keypad(overlay, TRUE);
             break;
         }
+    }
+
+    delwin(overlay);
+    curs_set(0);
+    renderer_draw(r);
+}
+
+/* ──────────────────────────────────────────────
+ * pantalla "Acerca de" (F1) con logo 3D rotante
+ * ────────────────────────────────────────────── */
+
+#define ABOUT_NUM_VERTICES 22
+#define ABOUT_NUM_EDGES    33
+
+typedef struct {
+    double x, y, z;
+} AboutPoint;
+
+typedef struct {
+    int start, end;
+} AboutEdge;
+
+static void about_draw_line(WINDOW *win, int x0, int y0, int x1, int y1,
+                             int min_x, int max_x, int min_y, int max_y,
+                             chtype attr) {
+    int dx = abs(x1 - x0);
+    int dy = abs(y1 - y0);
+    int sx = x0 < x1 ? 1 : -1;
+    int sy = y0 < y1 ? 1 : -1;
+    int err = dx - dy;
+    int cx = x0, cy = y0;
+
+    for (;;) {
+        if (cx >= min_x && cx < max_x && cy >= min_y && cy < max_y) {
+            wmove(win, cy, cx);
+            wattron(win, attr);
+            waddch(win, ACS_DIAMOND);
+            wattroff(win, attr);
+        }
+        if (cx == x1 && cy == y1) break;
+        int e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; cx += sx; }
+        if (e2 <  dx) { err += dx; cy += sy; }
+    }
+}
+
+static void about_show(Renderer *r) {
+    int box_w = 58;
+    int box_h = 22;
+    int start_x = (r->term_w - box_w) / 2;
+    int start_y = (r->content_h - box_h) / 2;
+    if (start_y < 0) start_y = 0;
+    if (start_x < 0) start_x = 0;
+    if (box_w > r->term_w) box_w = r->term_w;
+    if (box_h > r->content_h) box_h = r->content_h;
+
+    WINDOW *overlay = newwin(box_h, box_w, start_y, start_x);
+    keypad(overlay, TRUE);
+    wtimeout(overlay, 60);
+    curs_set(0);
+
+    /* ── vértices 3D de las letras M y D ── */
+    static const AboutPoint vertices[ABOUT_NUM_VERTICES] = {
+        /* M frente (0-4), z = +0.20 */
+        {-0.80, -0.70,  0.20},  /*  0: M abajo-izq     */
+        {-0.80,  0.70,  0.20},  /*  1: M arriba-izq    */
+        {-0.15, -0.05,  0.20},  /*  2: M medio (V dip) */
+        { 0.50,  0.70,  0.20},  /*  3: M arriba-der    */
+        { 0.50, -0.70,  0.20},  /*  4: M abajo-der     */
+        /* D frente (5-10), z = +0.20 */
+        { 1.30, -0.70,  0.20},  /*  5: D abajo-izq     */
+        { 1.30,  0.70,  0.20},  /*  6: D arriba-izq    */
+        { 1.80,  0.70,  0.20},  /*  7: D arriba         */
+        { 2.10,  0.30,  0.20},  /*  8: D arriba-der    */
+        { 2.10, -0.30,  0.20},  /*  9: D abajo-der     */
+        { 1.80, -0.70,  0.20},  /* 10: D abajo          */
+        /* M atrás (11-15), z = -0.20 */
+        {-0.80, -0.70, -0.20},  /* 11 */
+        {-0.80,  0.70, -0.20},  /* 12 */
+        {-0.15, -0.05, -0.20},  /* 13 */
+        { 0.50,  0.70, -0.20},  /* 14 */
+        { 0.50, -0.70, -0.20},  /* 15 */
+        /* D atrás (16-21), z = -0.20 */
+        { 1.30, -0.70, -0.20},  /* 16 */
+        { 1.30,  0.70, -0.20},  /* 17 */
+        { 1.80,  0.70, -0.20},  /* 18 */
+        { 2.10,  0.30, -0.20},  /* 19 */
+        { 2.10, -0.30, -0.20},  /* 20 */
+        { 1.80, -0.70, -0.20},  /* 21 */
+    };
+
+    /* ── aristas: pares de índices de vértices ── */
+    static const AboutEdge edges[ABOUT_NUM_EDGES] = {
+        /* M cara frontal (4 aristas) */
+        {0, 1}, {1, 2}, {2, 3}, {3, 4},
+        /* D cara frontal (6 aristas - curva aproximada) */
+        {5, 6}, {6, 7}, {7, 8}, {8, 9}, {9, 10}, {10, 5},
+        /* M cara trasera (4 aristas) */
+        {11, 12}, {12, 13}, {13, 14}, {14, 15},
+        /* D cara trasera (6 aristas) */
+        {16, 17}, {17, 18}, {18, 19}, {19, 20}, {20, 21}, {21, 16},
+        /* conexiones frente-atrás (extrusión 3D) */
+        {0, 11}, {1, 12}, {3, 14}, {4, 15},   /* M esquinas        */
+        {5, 16}, {6, 17}, {7, 18}, {8, 19},   /* D esquinas + arco */
+        {9, 20}, {10, 21},
+        /* arista extra: base de la M para reforzar silueta */
+        {0, 4},
+    };
+
+    double angle   = 0.0;
+    int    done    = 0;
+    int    logo_cy = 12;
+    int    logo_cx = box_w / 2;
+    double scale   = 7.0;
+
+    while (!done) {
+        werase(overlay);
+        box(overlay, 0, 0);
+
+        /* título */
+        wattron(overlay, A_BOLD);
+        mvwprintw(overlay, 1, (box_w - 24) / 2, " VisorMD — Acerca de ");
+        wattroff(overlay, A_BOLD);
+
+        /* datos */
+        mvwprintw(overlay, 3, 4, "Autor:        Jairo Grateron");
+        mvwprintw(overlay, 4, 4, "Email:        jgrateron@gmail.com");
+        mvwprintw(overlay, 5, 4, "Último commit:" GIT_DATE);
+
+        /* separador */
+        mvwprintw(overlay, 6, 3,
+                  "──────────────────────────────────────────────────");
+
+        /* ayuda */
+        mvwprintw(overlay, box_h - 2, (box_w - 34) / 2,
+                  "Presiona cualquier tecla para cerrar");
+
+        /* ── logo 3D rotante ── */
+        double c = cos(angle);
+        double s = sin(angle);
+
+        /* elegir color según ángulo para efecto dinámico sutil */
+        int edge_cp = CP_LINK;
+        chtype edge_attr = COLOR_PAIR(edge_cp) | A_BOLD;
+
+        for (int e = 0; e < ABOUT_NUM_EDGES; e++) {
+            int i0 = edges[e].start;
+            int i1 = edges[e].end;
+
+            /* rotar y proyectar vértice 0 */
+            double x0r = vertices[i0].x * c + vertices[i0].z * s;
+            double y0r = vertices[i0].y;
+            double z0r = -vertices[i0].x * s + vertices[i0].z * c;
+
+            /* rotar y proyectar vértice 1 */
+            double x1r = vertices[i1].x * c + vertices[i1].z * s;
+            double y1r = vertices[i1].y;
+            double z1r = -vertices[i1].x * s + vertices[i1].z * c;
+
+            /* atenuar aristas traseras (z negativa = más lejos) */
+            double z_avg = (z0r + z1r) * 0.5;
+            chtype attr = edge_attr;
+            if (z_avg < -0.05) attr = COLOR_PAIR(edge_cp) | A_DIM;
+
+            /* escalar y centrar */
+            int sx0 = logo_cx + (int)(x0r * scale);
+            int sy0 = logo_cy - (int)(y0r * scale);
+            int sx1 = logo_cx + (int)(x1r * scale);
+            int sy1 = logo_cy - (int)(y1r * scale);
+
+            about_draw_line(overlay, sx0, sy0, sx1, sy1,
+                            1, box_w - 1, 1, box_h - 1, attr);
+        }
+
+        wrefresh(overlay);
+
+        int ch = wgetch(overlay);
+        if (ch != ERR) {
+            if (ch == KEY_RESIZE) {
+                renderer_resize(r);
+                delwin(overlay);
+                box_w = 58;
+                box_h = 22;
+                start_x = (r->term_w - box_w) / 2;
+                start_y = (r->content_h - box_h) / 2;
+                if (start_y < 0) start_y = 0;
+                if (start_x < 0) start_x = 0;
+                if (box_w > r->term_w) box_w = r->term_w;
+                if (box_h > r->content_h) box_h = r->content_h;
+                logo_cx = box_w / 2;
+                logo_cy = 12;
+                overlay = newwin(box_h, box_w, start_y, start_x);
+                keypad(overlay, TRUE);
+                wtimeout(overlay, 60);
+            } else {
+                done = 1;
+            }
+        }
+
+        angle += 0.07;
+        if (angle > 2.0 * M_PI) angle -= 2.0 * M_PI;
     }
 
     delwin(overlay);

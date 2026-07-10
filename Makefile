@@ -3,8 +3,13 @@ CFLAGS  := -Wall -Wextra -std=c11 -D_GNU_SOURCE -O2 -g
 NCURSES_CFLAGS := $(shell pkg-config --cflags ncursesw 2>/dev/null)
 NCURSES_LIBS   := $(shell pkg-config --libs   ncursesw 2>/dev/null || echo "-lncursesw")
 CFLAGS  += $(NCURSES_CFLAGS)
-LDFLAGS := $(NCURSES_LIBS)
-LDFLAGS_STATIC := -static $(NCURSES_LIBS) -ltinfo
+
+GIT_AUTHOR := $(shell git log -1 --format='%an' 2>/dev/null || echo "desconocido")
+GIT_DATE   := $(shell git log -1 --format='%cd' --date=short 2>/dev/null || echo "desconocida")
+CFLAGS     += -DGIT_AUTHOR='"$(GIT_AUTHOR)"' -DGIT_DATE='"$(GIT_DATE)"'
+
+LDFLAGS := $(NCURSES_LIBS) -lm
+LDFLAGS_STATIC := -static $(NCURSES_LIBS) -ltinfo -lm
 
 SRCDIR  := src
 OBJDIR  := obj

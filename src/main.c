@@ -29,6 +29,7 @@ static void usage(const char *prog) {
             "  G / End   Ir al final del documento\n"
             "  n         Alternar números de línea\n"
             "  w         Alternar ajuste de palabras\n"
+            "  F1        Acerca de VisorMD\n"
             "  F2        Seleccionar tema de colores\n"
             "  F4        Alternar vista renderizada / texto crudo\n"
             "\n"
