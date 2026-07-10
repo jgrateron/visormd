@@ -6,7 +6,8 @@
 /* ── estado del renderer (ncurses + scroll) ── */
 typedef struct Renderer Renderer;
 
-Renderer *renderer_create(Document *doc, const char *filename);
+Renderer *renderer_create(Document *doc, const char *filename,
+                          char **raw_lines, int raw_count);
 void      renderer_free(Renderer *r);
 void      renderer_resize(Renderer *r);
 void      renderer_draw(Renderer *r);

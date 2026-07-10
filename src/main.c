@@ -30,6 +30,7 @@ static void usage(const char *prog) {
             "  n         Alternar números de línea\n"
             "  w         Alternar ajuste de palabras\n"
             "  F2        Seleccionar tema de colores\n"
+            "  F4        Alternar vista renderizada / texto crudo\n"
             "\n"
             "Ejemplos:\n"
             "  %s README.md               # modo interactivo\n"
@@ -104,7 +105,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     doc_parse(doc, buf->lines, buf->count);
-    buffer_free(buf);  /* ya no necesitamos las líneas crudas */
+    /* las líneas crudas se pasan al renderer, no las liberamos aquí */
 
     if (cat_mode) {
         /* ── modo cat: volcar a stdout y salir ── */
@@ -124,7 +125,9 @@ int main(int argc, char **argv) {
         }
 
         /* ── iniciar renderer ncurses ── */
-        Renderer *renderer = renderer_create(doc, filename);
+        Renderer *renderer = renderer_create(doc, filename,
+                                             buf->lines, buf->count);
+        free(buf);  /* solo el struct, las líneas las posee el renderer */
         if (!renderer) {
             fprintf(stderr, "%s: error al iniciar ncurses\n", argv[0]);
             doc_free(doc);

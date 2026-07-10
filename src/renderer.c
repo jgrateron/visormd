@@ -62,9 +62,14 @@ struct Renderer {
     int         anchor_line;    /* línea donde empezó el último scroll_page */
     int         anchor_skip;
 
+    /* líneas crudas (texto original sin parsear) */
+    char      **raw_lines;
+    int         raw_count;
+
     /* configuración */
     int         show_numbers;   /* toggle con 'n' */
     int         wrap_words;     /* toggle con 'w' */
+    int         show_raw;       /* toggle con F4: 0=renderizado, 1=crudo */
     int         theme_idx;      /* índice en themes[] */
 };
 
@@ -526,8 +531,28 @@ static int total_visual_rows(Renderer *r) {
     int avail  = r->term_w - margin;
     if (avail < 1) avail = 1;
     int total = 0;
-    for (int i = 0; i < r->doc->count; i++)
-        total += line_wrapped_rows(&r->doc->lines[i], avail, r->wrap_words);
+
+    if (r->show_raw) {
+        /* modo crudo: calcular filas visuales desde líneas raw */
+        for (int i = 0; i < r->raw_count; i++) {
+            const char *txt = r->raw_lines[i] ? r->raw_lines[i] : "";
+            int len = (int)strlen(txt);
+            if (len == 0) { total++; continue; }
+            wchar_t *wbuf = malloc(sizeof(wchar_t) * (size_t)(len + 1));
+            if (!wbuf) { total++; continue; }
+            int wlen = utf8_to_wide(txt, len, wbuf, len + 1);
+            if (wlen <= 0) { total++; free(wbuf); continue; }
+            int *breaks = NULL;
+            int rows = build_visual_lines(wbuf, wlen, avail, r->wrap_words,
+                                           0, &breaks);
+            free(breaks);
+            free(wbuf);
+            total += (rows > 0) ? rows : 1;
+        }
+    } else {
+        for (int i = 0; i < r->doc->count; i++)
+            total += line_wrapped_rows(&r->doc->lines[i], avail, r->wrap_words);
+    }
     return total;
 }
 
@@ -1122,6 +1147,87 @@ static int render_source_line(Renderer *r, int line_idx,
 }
 
 /* ──────────────────────────────────────────────
+ * renderizar una línea cruda (modo F4)
+ * retorna cuántas filas de pantalla se usaron
+ * ────────────────────────────────────────────── */
+static int render_raw_line(Renderer *r, int line_idx,
+                            int screen_y, int skip_rows) {
+    if (screen_y >= r->content_h) return 0;
+    if (line_idx < 0 || line_idx >= r->raw_count) return 0;
+
+    const char *raw_text = r->raw_lines[line_idx];
+    if (!raw_text) raw_text = "";
+
+    int margin  = r->show_numbers ? 6 : 2;
+    int avail_w = r->term_w - margin;
+    if (avail_w < 1) avail_w = 1;
+
+    /* convertir UTF-8 → wide chars */
+    int raw_len = (int)strlen(raw_text);
+    wchar_t *wbuf = malloc(sizeof(wchar_t) * (size_t)(raw_len + 1));
+    if (!wbuf) return 1;
+
+    int wlen = utf8_to_wide(raw_text, raw_len, wbuf, raw_len + 1);
+
+    if (wlen == 0) {
+        /* línea vacía */
+        if (skip_rows <= 0 && screen_y >= 0) {
+            draw_line_number(r, line_idx, screen_y);
+            wmove(r->main_win, screen_y, margin);
+            wclrtoeol(r->main_win);
+        }
+        free(wbuf);
+        return 1;
+    }
+
+    /* construir líneas visuales con word-wrap */
+    int *breaks = NULL;
+    int nlines = build_visual_lines(wbuf, wlen, avail_w, r->wrap_words,
+                                     0, &breaks);
+    if (nlines < 0) {
+        free(wbuf);
+        return 1;
+    }
+
+    int used = 0;
+    for (int vl = 0; vl < nlines; vl++) {
+        int row = screen_y + vl - skip_rows;
+        if (row < 0 || row >= r->content_h) {
+            if (vl >= skip_rows) used++;
+            continue;
+        }
+        if (vl < skip_rows) continue;
+
+        int seg_start = breaks[vl];
+        int seg_end   = (vl + 1 < nlines) ? breaks[vl + 1] : wlen;
+
+        /* número de línea solo en la primera fila visual */
+        if (vl == 0)
+            draw_line_number(r, line_idx, row);
+
+        /* dibujar texto crudo con color por defecto */
+        wmove(r->main_win, row, margin);
+        wattron(r->main_win, COLOR_PAIR(CP_DEFAULT));
+        waddnwstr(r->main_win, wbuf + seg_start, seg_end - seg_start);
+        wattroff(r->main_win, COLOR_PAIR(CP_DEFAULT));
+        wclrtoeol(r->main_win);
+
+        used++;
+    }
+
+    free(wbuf);
+    free(breaks);
+
+    if (used < 0) used = 0;
+    if (screen_y + used > r->content_h)
+        used = r->content_h - screen_y;
+    return used > 0 ? used : 1;
+}
+
+/* ── filas visuales de una línea cruda (para scroll en modo raw) ── */
+static int raw_line_wrapped_rows(Renderer *r, int line_idx, int avail_w);
+
+/* ──────────────────────────────────────────────
  * dibujar barra de estado
  * ────────────────────────────────────────────── */
 static void draw_status(Renderer *r) {
@@ -1133,8 +1239,13 @@ static void draw_status(Renderer *r) {
     int cur   = 0;
     int avail_w = r->term_w - (r->show_numbers ? 6 : 2);
     if (avail_w < 1) avail_w = 1;
-    for (int i = 0; i < r->scroll_line && i < r->doc->count; i++)
-        cur += line_wrapped_rows(&r->doc->lines[i], avail_w, r->wrap_words);
+    if (r->show_raw) {
+        for (int i = 0; i < r->scroll_line && i < r->raw_count; i++)
+            cur += raw_line_wrapped_rows(r, i, avail_w);
+    } else {
+        for (int i = 0; i < r->scroll_line && i < r->doc->count; i++)
+            cur += line_wrapped_rows(&r->doc->lines[i], avail_w, r->wrap_words);
+    }
     cur += r->scroll_skip;
     if (cur < 0) cur = 0;
 
@@ -1145,12 +1256,15 @@ static void draw_status(Renderer *r) {
     const char *slash = strrchr(fname, '/');
     const char *show  = slash ? slash + 1 : fname;
 
+    int line_count = r->show_raw ? r->raw_count : r->doc->count;
+    const char *mode_str = r->show_raw ? "[F4]render" : "[F4]crudo";
+
     mvwprintw(r->status_win, 0, 0,
-              " visormd  %s  L%d/%d  %d%%  [q]uit [r]eload [arrows/jk] "
+              " visormd  %s  L%d/%d  %d%%  %s  [q]uit [r]eload [arrows/jk] "
               "[PgUp/PgDn] [g/G] [n]ums [w]rap [F2]tema",
               show,
-              r->scroll_line + 1, r->doc->count,
-              pct);
+              r->scroll_line + 1, line_count,
+              pct, mode_str);
     wrefresh(r->status_win);
 }
 
@@ -1158,14 +1272,18 @@ static void draw_status(Renderer *r) {
  * API pública
  * ────────────────────────────────────────────── */
 
-Renderer *renderer_create(Document *doc, const char *filename) {
+Renderer *renderer_create(Document *doc, const char *filename,
+                          char **raw_lines, int raw_count) {
     Renderer *r = calloc(1, sizeof(Renderer));
     if (!r) return NULL;
 
     r->doc          = doc;
     r->filename     = strdup(filename ? filename : "stdin");
+    r->raw_lines    = raw_lines;
+    r->raw_count    = raw_count;
     r->show_numbers = 0;
     r->wrap_words   = 1;
+    r->show_raw     = 0;
     r->theme_idx    = 0;
     r->scroll_line  = 0;
     r->scroll_skip  = 0;
@@ -1203,6 +1321,11 @@ Renderer *renderer_create(Document *doc, const char *filename) {
 void renderer_free(Renderer *r) {
     if (!r) return;
     doc_free(r->doc);
+    if (r->raw_lines) {
+        for (int i = 0; i < r->raw_count; i++)
+            free(r->raw_lines[i]);
+        free(r->raw_lines);
+    }
     free(r->filename);
     delwin(r->main_win);
     delwin(r->status_win);
@@ -1229,15 +1352,20 @@ void renderer_resize(Renderer *r) {
     if (avail < 1) avail = 1;
 
     /* ajustar scroll_skip a las nuevas dimensiones */
-    while (r->scroll_line < r->doc->count) {
-        int rows = line_wrapped_rows(&r->doc->lines[r->scroll_line], avail,
+    int line_count = r->show_raw ? r->raw_count : r->doc->count;
+    while (r->scroll_line < line_count) {
+        int rows;
+        if (r->show_raw)
+            rows = raw_line_wrapped_rows(r, r->scroll_line, avail);
+        else
+            rows = line_wrapped_rows(&r->doc->lines[r->scroll_line], avail,
                                       r->wrap_words);
         if (r->scroll_skip < rows) break;
         r->scroll_skip -= rows;
         r->scroll_line++;
     }
-    if (r->scroll_line >= r->doc->count) {
-        r->scroll_line = r->doc->count > 0 ? r->doc->count - 1 : 0;
+    if (r->scroll_line >= line_count) {
+        r->scroll_line = line_count > 0 ? line_count - 1 : 0;
         r->scroll_skip = 0;
     }
 }
@@ -1252,10 +1380,20 @@ void renderer_draw(Renderer *r) {
     int sl  = r->scroll_line;
     int skip = r->scroll_skip;
 
-    for (int i = sl; i < r->doc->count && sy < r->content_h; i++) {
-        int used = render_source_line(r, i, sy, skip);
-        sy  += used;
-        skip = 0;  /* solo la primera línea tiene skip */
+    if (r->show_raw) {
+        /* ── modo crudo: mostrar líneas originales ── */
+        for (int i = sl; i < r->raw_count && sy < r->content_h; i++) {
+            int used = render_raw_line(r, i, sy, skip);
+            sy  += used;
+            skip = 0;
+        }
+    } else {
+        /* ── modo renderizado ── */
+        for (int i = sl; i < r->doc->count && sy < r->content_h; i++) {
+            int used = render_source_line(r, i, sy, skip);
+            sy  += used;
+            skip = 0;  /* solo la primera línea tiene skip */
+        }
     }
 
     /* limpiar filas sobrantes */
@@ -1280,11 +1418,34 @@ static int avail_width(Renderer *r) {
     return w < 1 ? 1 : w;
 }
 
+/* ── filas visuales de una línea cruda (para scroll en modo raw) ── */
+static int raw_line_wrapped_rows(Renderer *r, int line_idx, int avail_w) {
+    if (line_idx < 0 || line_idx >= r->raw_count) return 1;
+    const char *txt = r->raw_lines[line_idx];
+    if (!txt || !txt[0]) return 1;
+    int len = (int)strlen(txt);
+    wchar_t *wbuf = malloc(sizeof(wchar_t) * (size_t)(len + 1));
+    if (!wbuf) return 1;
+    int wlen = utf8_to_wide(txt, len, wbuf, len + 1);
+    if (wlen <= 0) { free(wbuf); return 1; }
+    int *breaks = NULL;
+    int rows = build_visual_lines(wbuf, wlen, avail_w, r->wrap_words, 0, &breaks);
+    free(breaks);
+    free(wbuf);
+    return rows > 0 ? rows : 1;
+}
+
 /* avanzar N filas visuales */
 static void scroll_down(Renderer *r, int rows) {
     int aw = avail_width(r);
-    while (rows > 0 && r->scroll_line < r->doc->count) {
-        int lr = line_wrapped_rows(&r->doc->lines[r->scroll_line], aw,
+    int line_count = r->show_raw ? r->raw_count : r->doc->count;
+
+    while (rows > 0 && r->scroll_line < line_count) {
+        int lr;
+        if (r->show_raw)
+            lr = raw_line_wrapped_rows(r, r->scroll_line, aw);
+        else
+            lr = line_wrapped_rows(&r->doc->lines[r->scroll_line], aw,
                                    r->wrap_words);
         int left = lr - r->scroll_skip;
         if (rows < left) {
@@ -1296,8 +1457,8 @@ static void scroll_down(Renderer *r, int rows) {
         r->scroll_skip = 0;
     }
     /* no pasarse del final */
-    if (r->scroll_line >= r->doc->count) {
-        r->scroll_line = r->doc->count > 0 ? r->doc->count - 1 : 0;
+    if (r->scroll_line >= line_count) {
+        r->scroll_line = line_count > 0 ? line_count - 1 : 0;
         r->scroll_skip = 0;
     }
 }
@@ -1314,8 +1475,11 @@ static void scroll_up(Renderer *r, int rows) {
         r->scroll_skip = 0;
         if (r->scroll_line <= 0) return;
         r->scroll_line--;
-        r->scroll_skip = line_wrapped_rows(&r->doc->lines[r->scroll_line], aw,
-                                            r->wrap_words);
+        if (r->show_raw)
+            r->scroll_skip = raw_line_wrapped_rows(r, r->scroll_line, aw);
+        else
+            r->scroll_skip = line_wrapped_rows(&r->doc->lines[r->scroll_line], aw,
+                                                r->wrap_words);
         if (r->scroll_skip > 0) r->scroll_skip--;
         if (rows > 0) rows--; /* ya retrocedimos una fila */
     }
@@ -1341,15 +1505,25 @@ static void renderer_reload(Renderer *r) {
         return;
     }
     doc_parse(new_doc, buf->lines, buf->count);
-    buffer_free(buf);
 
     /* reemplazar documento viejo por el nuevo */
     doc_free(r->doc);
     r->doc = new_doc;
 
+    /* liberar líneas crudas viejas y tomar las nuevas del buffer */
+    if (r->raw_lines) {
+        for (int i = 0; i < r->raw_count; i++)
+            free(r->raw_lines[i]);
+        free(r->raw_lines);
+    }
+    r->raw_lines = buf->lines;
+    r->raw_count = buf->count;
+    free(buf);  /* solo el struct, las líneas ahora son del renderer */
+
     /* reclampar scroll por si el archivo se achicó */
-    if (r->scroll_line >= r->doc->count) {
-        r->scroll_line = r->doc->count > 0 ? r->doc->count - 1 : 0;
+    int line_count = r->show_raw ? r->raw_count : r->doc->count;
+    if (r->scroll_line >= line_count) {
+        r->scroll_line = line_count > 0 ? line_count - 1 : 0;
         r->scroll_skip = 0;
     }
 }
@@ -1388,12 +1562,15 @@ int renderer_handle_input(Renderer *r, int ch) {
 
     case 'G':
         /* ir al final (mostrar última pantalla) */
-        if (r->doc->count > 0) {
-            r->scroll_line = r->doc->count - 1;
-            r->scroll_skip = 0;
-            /* desplazar hacia atrás hasta llenar la pantalla */
-            for (int i = 0; i < r->content_h - 1; i++)
-                scroll_up(r, 1);
+        {
+            int lc = r->show_raw ? r->raw_count : r->doc->count;
+            if (lc > 0) {
+                r->scroll_line = lc - 1;
+                r->scroll_skip = 0;
+                /* desplazar hacia atrás hasta llenar la pantalla */
+                for (int i = 0; i < r->content_h - 1; i++)
+                    scroll_up(r, 1);
+            }
         }
         break;
 
@@ -1418,11 +1595,14 @@ int renderer_handle_input(Renderer *r, int ch) {
         break;
 
     case KEY_END:
-        if (r->doc->count > 0) {
-            r->scroll_line = r->doc->count - 1;
-            r->scroll_skip = 0;
-            for (int i = 0; i < r->content_h - 1; i++)
-                scroll_up(r, 1);
+        {
+            int lc = r->show_raw ? r->raw_count : r->doc->count;
+            if (lc > 0) {
+                r->scroll_line = lc - 1;
+                r->scroll_skip = 0;
+                for (int i = 0; i < r->content_h - 1; i++)
+                    scroll_up(r, 1);
+            }
         }
         break;
 
@@ -1434,17 +1614,26 @@ int renderer_handle_input(Renderer *r, int ch) {
         theme_selector_show(r);
         break;
 
+    case KEY_F(4):
+        r->show_raw = !r->show_raw;
+        /* resetear scroll al cambiar de vista */
+        r->scroll_line = 0;
+        r->scroll_skip = 0;
+        break;
+
     default:
         return 0;
     }
 
     /* reclampar después de cualquier movimiento */
+    int line_count = r->show_raw ? r->raw_count : r->doc->count;
+
     if (r->scroll_line < 0) {
         r->scroll_line = 0;
         r->scroll_skip = 0;
     }
-    if (r->scroll_line >= r->doc->count) {
-        r->scroll_line = r->doc->count > 0 ? r->doc->count - 1 : 0;
+    if (r->scroll_line >= line_count) {
+        r->scroll_line = line_count > 0 ? line_count - 1 : 0;
         r->scroll_skip = 0;
     }
 
