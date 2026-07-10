@@ -145,6 +145,123 @@ static const char *js_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * C#
+ * ────────────────────────────────────────────── */
+static const char *cs_keywords[] = {
+    "abstract", "as", "base", "bool", "break",
+    "byte", "case", "catch", "char", "checked",
+    "class", "const", "continue", "decimal", "default",
+    "delegate", "do", "double", "else", "enum",
+    "event", "explicit", "extern", "false", "finally",
+    "fixed", "float", "for", "foreach", "goto",
+    "if", "implicit", "in", "int", "interface",
+    "internal", "is", "lock", "long", "namespace",
+    "new", "null", "object", "operator", "out",
+    "override", "params", "private", "protected", "public",
+    "readonly", "record", "ref", "return", "sbyte",
+    "sealed", "short", "sizeof", "stackalloc", "static",
+    "string", "struct", "switch", "this", "throw",
+    "true", "try", "typeof", "uint", "ulong",
+    "unchecked", "unsafe", "ushort", "using", "virtual",
+    "void", "volatile", "while",
+    /* contextuales */
+    "add", "alias", "ascending", "async", "await",
+    "by", "descending", "dynamic", "equals", "from",
+    "get", "global", "group", "init", "into",
+    "join", "let", "managed", "nameof", "nint",
+    "not", "notnull", "nuint", "on", "or",
+    "orderby", "partial", "remove", "select", "set",
+    "unmanaged", "value", "var", "when", "where",
+    "with", "yield",
+    NULL
+};
+
+static const char *cs_types[] = {
+    "object", "bool", "byte", "sbyte", "short", "ushort",
+    "int", "uint", "long", "ulong", "float", "double",
+    "decimal", "char", "void", "nint", "nuint",
+    "DateTime", "TimeSpan", "DateTimeOffset", "Guid", "Uri",
+    "List", "Dictionary", "HashSet", "Queue", "Stack",
+    "LinkedList", "SortedList", "SortedSet", "SortedDictionary",
+    "IEnumerable", "IEnumerator", "IList", "IDictionary",
+    "ISet", "ICollection", "IReadOnlyList", "IReadOnlyDictionary",
+    "IQueryable", "IGrouping", "ILookup",
+    "Array", "ArrayList", "Hashtable", "BitArray",
+    "StringBuilder", "Regex", "Match", "CultureInfo",
+    "Task", "ValueTask", "TaskCompletionSource",
+    "Exception", "ArgumentException", "ArgumentNullException",
+    "InvalidOperationException", "NullReferenceException",
+    "NotSupportedException", "NotImplementedException",
+    "Stream", "FileStream", "MemoryStream", "BufferedStream",
+    "File", "Directory", "Path", "FileInfo", "DirectoryInfo",
+    "HttpClient", "HttpResponseMessage", "HttpContent",
+    "Console", "Math", "Convert", "Enumerable", "Environment",
+    "Tuple", "ValueTuple",
+    "Nullable", "Lazy", "WeakReference",
+    "Action", "Func", "Predicate", "EventHandler",
+    "CancellationToken", "CancellationTokenSource",
+    "XDocument", "XElement", "XAttribute", "XmlDocument",
+    "DataTable", "DataSet", "SqlConnection", "SqlCommand",
+    "string", "String",
+    NULL
+};
+
+/* ──────────────────────────────────────────────
+ * Visual Basic .NET
+ * ────────────────────────────────────────────── */
+static const char *vb_keywords[] = {
+    "AddHandler", "AddressOf", "Alias", "And", "AndAlso",
+    "As", "Async", "Await", "Boolean", "ByRef",
+    "Byte", "ByVal", "Call", "Case", "Catch",
+    "CBool", "CByte", "CChar", "CDate", "CDbl",
+    "CDec", "Char", "CInt", "Class", "CLng",
+    "CObj", "Const", "Continue", "CSByte", "CShort",
+    "CSng", "CStr", "CType", "CUInt", "CULng",
+    "CUShort", "Date", "Decimal", "Declare", "Default",
+    "Delegate", "Dim", "DirectCast", "Do", "Double",
+    "Each", "Else", "ElseIf", "End", "EndIf",
+    "Enum", "Erase", "Error", "Event", "Exit",
+    "False", "Finally", "For", "Friend", "Function",
+    "Get", "GetType", "Global", "GoTo", "Handles",
+    "If", "Implements", "Imports", "In", "Inherits",
+    "Integer", "Interface", "Is", "IsNot", "Let",
+    "Lib", "Like", "Long", "Loop", "Me",
+    "Mod", "Module", "MustInherit", "MustOverride", "MyBase",
+    "MyClass", "NameOf", "Narrowing", "New", "Next",
+    "Not", "Nothing", "NotInheritable", "NotOverridable", "Object",
+    "Of", "On", "Operator", "Option", "Optional",
+    "Or", "OrElse", "Out", "Overloads", "Overridable",
+    "Overrides", "ParamArray", "Partial", "Private", "Property",
+    "Protected", "Public", "RaiseEvent", "ReadOnly", "ReDim",
+    "Rem", "RemoveHandler", "Resume", "Return", "Select",
+    "Set", "Shadows", "Shared", "Short", "Single",
+    "Static", "Step", "Stop", "String", "Structure",
+    "Sub", "SyncLock", "Then", "Throw", "To",
+    "True", "Try", "TryCast", "TypeOf", "UInteger",
+    "ULong", "UShort", "Using", "Variant", "Wend",
+    "When", "While", "Widening", "With", "WithEvents",
+    "WriteOnly", "Xor", "Yield",
+    NULL
+};
+
+static const char *vb_types[] = {
+    "Boolean", "Byte", "SByte", "Char", "Date",
+    "Decimal", "Double", "Integer", "Long", "Object",
+    "Short", "Single", "String", "UInteger", "ULong",
+    "UShort",
+    "List", "Dictionary", "HashSet", "Queue", "Stack",
+    "IEnumerable", "IEnumerator", "IList", "IDictionary",
+    "Task", "Exception", "EventArgs",
+    "Console", "Math", "Convert", "Environment",
+    "File", "Directory", "Path", "Stream",
+    "DateTime", "TimeSpan", "Guid", "Uri",
+    "SqlConnection", "SqlCommand", "DataTable", "DataSet",
+    "XDocument", "XElement",
+    "Regex", "Match", "StringBuilder",
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
@@ -160,6 +277,13 @@ static const LangDef languages[] = {
     { "js",         js_keywords,  js_types,   0 },
     { "ts",         js_keywords,  js_types,   0 },
     { "typescript", js_keywords,  js_types,   0 },
+    { "cs",         cs_keywords,  cs_types,   0 },
+    { "csharp",     cs_keywords,  cs_types,   0 },
+    { "c#",         cs_keywords,  cs_types,   0 },
+    { "vb",         vb_keywords,  vb_types,   0 },
+    { "vbnet",      vb_keywords,  vb_types,   0 },
+    { "vb.net",     vb_keywords,  vb_types,   0 },
+    { "visualbasic",vb_keywords,  vb_types,   0 },
     { NULL, NULL, NULL, 0 }
 };
 

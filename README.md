@@ -13,7 +13,7 @@ A terminal-based interactive Markdown viewer written in C11 with ncursesw. It re
 - **Headings** (H1–H6) with distinct colors
 - **Inline formatting** — bold (`**text**` / `__text__`), italic (`*text*` / `_text_`), `code`, and [links](https://example.com)
 - **Tables** with box-drawing borders (`┌┬┐├┼┤└┴┘`), column alignment (`:---`, `:---:`, `---:`), and inline formatting inside cells
-- **Code blocks** (fenced with ` ``` ` or `~~~`) with syntax highlighting for C, C++, Java, JavaScript, TypeScript, and Bash
+- **Code blocks** (fenced with ` ``` ` or `~~~`) with syntax highlighting for C, C++, Java, JavaScript, TypeScript, C#, Visual Basic .NET, and Bash
 - **Blockquotes** (with nested `>>`, `>>>` support), horizontal rules, unordered and ordered lists
 - **UTF-8 support** — emoji, CJK characters, and accented text with correct column width (via `wcwidth`)
 - **9 color themes** — Default, Monochrome, Solarized Dark/Light, Nord, Gruvbox Dark, Dracula, One Light (white background), One Dark
