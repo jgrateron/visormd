@@ -44,6 +44,13 @@ typedef enum {
     SPAN_BASH_VARIABLE,
     SPAN_BASH_KEYWORD,
     SPAN_BASH_NORMAL,
+    SPAN_KW_KEYWORD,
+    SPAN_KW_TYPE,
+    SPAN_KW_STRING,
+    SPAN_KW_COMMENT,
+    SPAN_KW_NUMBER,
+    SPAN_KW_PREPROC,
+    SPAN_KW_NORMAL,
 } SpanType;
 
 /* ── un fragmento de texto con un estilo uniforme ── */

@@ -30,7 +30,7 @@ Test Markdown inputs (`test/*.md`) and their expected plain-text outputs (`test/
 To regenerate expected outputs after a rendering change:
 
 ```bash
-for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md test/test_blockquote.md; do
+for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md test/test_blockquote.md test/test_highlight_c.md test/test_highlight_cpp.md test/test_highlight_java.md test/test_highlight_js.md; do
     base="${f%.md}"
     TERM=xterm-256color LANG=C.UTF-8 ./visormd --cat "$f" > "${base}_expected.txt"
 done
@@ -50,6 +50,10 @@ done
 | `test_lista.md` | Unordered list items with bold terms, inline code, and long wrapped lines |
 | `test_underscore.md` | Bold with `__text__`, italic with `_text_`, bold+italic with `___text___` and `__*text*__`, snake_case preservation |
 | `test_blockquote.md` | Single-level `>`, nested `>>` and `>>>` blockquotes, empty blockquote lines with `>` |
+| `test_highlight_c.md` | C syntax: keywords, types, strings, chars, single/multi-line comments, hex/binary/octal numbers, preprocessor directives (`#include`, `#define`, `#ifdef`) |
+| `test_highlight_cpp.md` | C++ syntax: classes, templates, namespaces, STL types, smart pointers, `noexcept`, `[[nodiscard]]`, `nullptr` |
+| `test_highlight_java.md` | Java syntax: classes, records, generics, annotations, exceptions, `Optional`, type inference (`var`) |
+| `test_highlight_js.md` | JavaScript ES6+: classes, private fields, arrow functions, template literals, destructuring, `bigint`, regex literals, optional chaining |
 
 ## Architecture
 
@@ -91,7 +95,13 @@ The default mode is interactive (ncurses), even when reading from a pipe/redirec
    - Config I/O: reads/writes `theme=<id>` in `$HOME/.config/visormd/config` (with `$XDG_CONFIG_HOME` support).
    - Theme selector overlay (triggered by F2) is implemented as a static function in `renderer.c` since it needs intimate access to ncurses windows.
 
-6. **`src/main.c`** — Entry point: argument parsing (`-c`/`--cat` for stdout dump, `-h` for help, or a single filename), locale setup (tries `""`, `C.UTF-8`, `en_US.UTF-8` in that order). When no filename is given, reads from stdin (pipe/redirect); for interactive mode, reopens `/dev/tty` so ncurses can read keyboard input. Calls `cat_render()` and exits in cat mode; otherwise wires the pipeline through the ncurses renderer and runs the input loop until `q`.
+6. **`src/highlight.c`** — Syntax highlighting for fenced code blocks:
+   - Maps language identifiers (`c`, `cpp`, `java`, `javascript`, `js`, `ts`, etc.) to keyword/type lists and tokenizer rules.
+   - Tokenizes per-line with a `HighlightState` that tracks multi-line comment (`/* */`) across lines.
+   - Produces `SPAN_KW_*` spans: `KEYWORD`, `TYPE`, `STRING`, `COMMENT`, `NUMBER`, `PREPROC`.
+   - For Bash (`bash`, `sh`, `zsh`), highlighting is still handled inline in `parser.c` (`parse_bash_line`) with the legacy `SPAN_BASH_*` spans.
+
+7. **`src/main.c`** — Entry point: argument parsing (`-c`/`--cat` for stdout dump, `-h` for help, or a single filename), locale setup (tries `""`, `C.UTF-8`, `en_US.UTF-8` in that order). When no filename is given, reads from stdin (pipe/redirect); for interactive mode, reopens `/dev/tty` so ncurses can read keyboard input. Calls `cat_render()` and exits in cat mode; otherwise wires the pipeline through the ncurses renderer and runs the input loop until `q`.
 
 ### Keybindings (hardcoded in `renderer_handle_input`)
 

@@ -132,6 +132,13 @@ static chtype span_attr(SpanType st, LineType lt) {
         case SPAN_BASH_VARIABLE:cp= CP_BASH_VARIABLE;              break;
         case SPAN_BASH_KEYWORD:cp = CP_BASH_KEYWORD; at = A_BOLD;  break;
         case SPAN_BASH_NORMAL:cp = CP_DEFAULT;                    break;
+        case SPAN_KW_KEYWORD:cp = CP_KW_KEYWORD; at = A_BOLD;     break;
+        case SPAN_KW_TYPE:   cp = CP_KW_TYPE;                     break;
+        case SPAN_KW_STRING: cp = CP_KW_STRING;                   break;
+        case SPAN_KW_COMMENT:cp = CP_KW_COMMENT; at = A_DIM;      break;
+        case SPAN_KW_NUMBER: cp = CP_KW_NUMBER;                   break;
+        case SPAN_KW_PREPROC:cp = CP_KW_PREPROC;                  break;
+        case SPAN_KW_NORMAL:cp = CP_DEFAULT;                     break;
         default:               cp = CP_DEFAULT;                    break;
         }
     }

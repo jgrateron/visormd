@@ -122,6 +122,13 @@ static void emit_span_ansi(FILE *f, int use_ansi,
     case SPAN_BASH_VARIABLE:fprintf(f, "%s", F_CYAN);            return;
     case SPAN_BASH_KEYWORD: fprintf(f, "%s%s", BLD, F_MAGENTA);  return;
     case SPAN_BASH_NORMAL:  fprintf(f, "%s", F_DEF);             return;
+    case SPAN_KW_KEYWORD: fprintf(f, "%s%s", BLD, F_BLUE);     return;
+    case SPAN_KW_TYPE:    fprintf(f, "%s", F_CYAN);            return;
+    case SPAN_KW_STRING:  fprintf(f, "%s", F_YELLOW);          return;
+    case SPAN_KW_COMMENT: fprintf(f, "%s%s", DIM, F_DEF);      return;
+    case SPAN_KW_NUMBER:  fprintf(f, "%s", F_MAGENTA);         return;
+    case SPAN_KW_PREPROC: fprintf(f, "%s", F_MAGENTA);         return;
+    case SPAN_KW_NORMAL:  fprintf(f, "%s", F_DEF);             return;
     default:                return;
     }
 }

@@ -1,0 +1,58 @@
+# Java Highlight Test
+
+Classes, interfaces, generics, and exception handling.
+
+```java
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+public class UserService {
+    private final Map<Long, User> store = new HashMap<>();
+    private static final int MAX_USERS = 1000;
+
+    public record User(Long id, String name, String email) {}
+
+    public Optional<User> findById(Long id) {
+        return Optional.ofNullable(store.get(id));
+    }
+
+    public List<User> searchByName(String query) {
+        List<User> results = new ArrayList<>();
+        for (User user : store.values()) {
+            if (user.name().contains(query)) {
+                results.add(user);
+            }
+        }
+        return results;
+    }
+
+    public void save(User user) throws IllegalStateException {
+        if (store.size() >= MAX_USERS) {
+            throw new IllegalStateException("Store full");
+        }
+        store.put(user.id(), user);
+    }
+
+    public static void main(String[] args) {
+        var service = new UserService();
+        service.save(new User(1L, "Alice", "alice@example.com"));
+        service.save(new User(2L, "Bob", "bob@example.com"));
+
+        service.findById(1L).ifPresent(user -> {
+            System.out.println("Found: " + user.name());
+        });
+
+        int count = 0;
+        boolean active = true;
+        double price = 19.99;
+        char grade = 'A';
+        long big = 9_223_372_036_854_775_807L;
+
+        String msg = "Hello, Java!";
+        System.out.println(msg);
+    }
+}
+```

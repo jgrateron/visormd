@@ -1,0 +1,53 @@
+C Highlight Test
+
+Keywords, types, strings, comments, numbers, and preprocessor directives.
+
+#include <stdio.h>
+#include <stdlib.h>
+
+// This is a single-line comment
+int main(void) {
+    /* Multi-line comment
+       spanning two lines */
+    int count = 42;
+    float price = 99.99f;
+    double pi = 3.14159265358979;
+    char letter = 'A';
+    char *msg = "Hello, World!";
+
+    if (count > 0 && price < 100.0) {
+        for (int i = 0; i < count; i++) {
+            printf("Item %d: %.2f\n", i, price);
+        }
+    }
+
+    // Hexadecimal
+    unsigned int hex = 0xDEADBEEF;
+    // Binary (C23)
+    unsigned int bits = 0b10101010;
+    // Octal
+    unsigned int perm = 0755;
+
+    switch (letter) {
+        case 'A': return 0;
+        case 'B': return 1;
+        default:  return -1;
+    }
+
+    return 0;
+}
+
+#define MAX_SIZE 1024
+#define SQUARE(x) ((x) * (x))
+
+#ifdef DEBUG
+    #define LOG(fmt, ...) printf("DEBUG: " fmt, __VA_ARGS__)
+#else
+    #define LOG(fmt, ...)
+#endif
+
+static const char *errors[] = {
+    "Not Found",
+    "Server Error",
+    "OK"
+};

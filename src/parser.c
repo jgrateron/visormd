@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "highlight.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -976,6 +977,8 @@ int doc_parse(Document *doc, char **raw_lines, int raw_count) {
     int  in_code_block = 0;
     int  in_highlight  = 0;
     char code_lang[32] = "";
+    HighlightState hl_state;
+    highlight_state_init(&hl_state);
 
     for (int i = 0; i < raw_count; i++) {
         ParsedLine line = {0};
@@ -1014,6 +1017,7 @@ int doc_parse(Document *doc, char **raw_lines, int raw_count) {
                 /* cerca con lenguaje: abre bloque de código */
                 in_code_block = 1;
                 extract_fence_lang(raw_lines[i], code_lang, sizeof(code_lang));
+                highlight_state_init(&hl_state);
                 /* no se emite la cerca de apertura */
             }
             continue;
@@ -1030,12 +1034,17 @@ int doc_parse(Document *doc, char **raw_lines, int raw_count) {
         /* ── dentro de un bloque de código ── */
         if (in_code_block) {
             line.type = LINE_CODE_BLOCK;
-            /* ¿bash / sh? tokenizar con resaltado */
-            if (code_lang[0] &&
-                (strcmp(code_lang, "bash") == 0 ||
-                 strcmp(code_lang, "sh")   == 0 ||
-                 strcmp(code_lang, "zsh")  == 0)) {
-                parse_bash_line(&line, raw_lines[i]);
+            if (code_lang[0]) {
+                if (strcmp(code_lang, "bash") == 0 ||
+                    strcmp(code_lang, "sh")   == 0 ||
+                    strcmp(code_lang, "zsh")  == 0) {
+                    parse_bash_line(&line, raw_lines[i]);
+                } else if (highlight_supported(code_lang)) {
+                    highlight_line(&line, raw_lines[i],
+                                   code_lang, &hl_state);
+                } else {
+                    add_span(&line, raw_lines[i], SPAN_NORMAL, NULL);
+                }
             } else {
                 add_span(&line, raw_lines[i], SPAN_NORMAL, NULL);
             }

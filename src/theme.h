@@ -28,9 +28,15 @@
 #define CP_BASH_VARIABLE 22
 #define CP_BASH_KEYWORD  23
 #define CP_LINE_NUMBER   24
+#define CP_KW_KEYWORD    25
+#define CP_KW_TYPE       26
+#define CP_KW_STRING     27
+#define CP_KW_COMMENT    28
+#define CP_KW_NUMBER     29
+#define CP_KW_PREPROC    30
 
 #define CP_FIRST  1
-#define CP_COUNT  25   /* índices 1..24, posición 0 sin usar */
+#define CP_COUNT  31   /* índices 1..30, posición 0 sin usar */
 
 /* ── un par foreground / background ── */
 typedef struct {
