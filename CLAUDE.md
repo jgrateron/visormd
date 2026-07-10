@@ -30,7 +30,7 @@ Test Markdown inputs (`test/*.md`) and their expected plain-text outputs (`test/
 To regenerate expected outputs after a rendering change:
 
 ```bash
-for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md test/test_blockquote.md test/test_highlight_c.md test/test_highlight_cpp.md test/test_highlight_java.md test/test_highlight_js.md test/test_highlight_cs.md test/test_highlight_vb.md; do
+for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md test/test_blockquote.md test/test_highlight_c.md test/test_highlight_cpp.md test/test_highlight_java.md test/test_highlight_js.md test/test_highlight_cs.md test/test_highlight_vb.md test/test_highlight_json.md; do
     base="${f%.md}"
     TERM=xterm-256color LANG=C.UTF-8 ./visormd --cat "$f" > "${base}_expected.txt"
 done
@@ -56,6 +56,7 @@ done
 | `test_highlight_js.md` | JavaScript ES6+: classes, private fields, arrow functions, template literals, destructuring, `bigint`, regex literals, optional chaining |
 | `test_highlight_cs.md` | C#: async/await, LINQ, records, generics, pattern matching, null-coalescing (`??`, `?.`), `decimal`, tuples, `dynamic` |
 | `test_highlight_vb.md` | Visual Basic .NET: modules, classes, `Async`/`Await`, LINQ lambdas, `Using`, properties, `Imports`, XML literals |
+| `test_highlight_json.md` | JSON: strings, numbers (int, float, scientific), literals (`true`, `false`, `null`), nested objects and arrays |
 
 ## Architecture
 

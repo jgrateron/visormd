@@ -1,0 +1,97 @@
+# JSON Highlight Test
+
+Exercises strings, numbers, keywords (true/false/null), nested objects, and arrays.
+
+```json
+{
+    "name": "VisorMD",
+    "version": "1.0.0",
+    "description": "Terminal Markdown viewer",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/user/visormd"
+    },
+    "keywords": [
+        "markdown",
+        "terminal",
+        "ncurses",
+        "viewer",
+        "cli"
+    ],
+    "author": {
+        "name": "Jairo",
+        "email": "jairo@example.com"
+    },
+    "license": "MIT",
+    "dependencies": {
+        "libncursesw": ">=6.0"
+    },
+    "scripts": {
+        "build": "make",
+        "test": "make test",
+        "clean": "make clean",
+        "install": "make install"
+    },
+    "settings": {
+        "theme": "one-dark",
+        "lineNumbers": true,
+        "wordWrap": false,
+        "tabSize": 4,
+        "autoReload": null
+    },
+    "stats": {
+        "files": 42,
+        "linesOfCode": 12345,
+        "coverage": 87.5,
+        "bugs": 0,
+        "performance": {
+            "startupMs": 12.3,
+            "renderMs": 1.5,
+            "memoryMb": 8.2
+        }
+    },
+    "features": [
+        {
+            "id": 1,
+            "name": "Markdown rendering",
+            "enabled": true,
+            "priority": "high"
+        },
+        {
+            "id": 2,
+            "name": "Syntax highlighting",
+            "enabled": true,
+            "languages": [
+                "c",
+                "cpp",
+                "java",
+                "javascript",
+                "csharp",
+                "vbnet",
+                "json"
+            ]
+        },
+        {
+            "id": 3,
+            "name": "Theme support",
+            "enabled": true,
+            "themes": 9
+        }
+    ],
+    "numbers": {
+        "integer": 256,
+        "negative": -42,
+        "float": 3.14159,
+        "scientific": 1.5e10,
+        "scientificNeg": 2.5e-3,
+        "decimal": 0.001
+    },
+    "unicode": "áéíóúñ 日本語 🎉",
+    "escaped": "Line1\nLine2\tTabbed \"quoted\" \\ backslash",
+    "urls": {
+        "homepage": "https://example.com",
+        "docs": "https://docs.example.com/getting-started",
+        "api": "https://api.example.com/v2"
+    }
+}
+```

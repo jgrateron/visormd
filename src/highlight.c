@@ -261,6 +261,16 @@ static const char *vb_types[] = {
     NULL
 };
 
+/* JSON */
+static const char *json_keywords[] = {
+    "true", "false", "null",
+    NULL
+};
+
+static const char *json_types[] = {
+    NULL
+};
+
 /* ──────────────────────────────────────────────
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
@@ -284,6 +294,7 @@ static const LangDef languages[] = {
     { "vbnet",      vb_keywords,  vb_types,   0 },
     { "vb.net",     vb_keywords,  vb_types,   0 },
     { "visualbasic",vb_keywords,  vb_types,   0 },
+    { "json",       json_keywords,json_types, 0 },
     { NULL, NULL, NULL, 0 }
 };
 
