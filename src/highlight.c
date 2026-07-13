@@ -357,6 +357,7 @@ static const LangDef languages[] = {
     { "htm",        xml_keywords, xml_types,  0, 0, 1 },
     { "xhtml",      xml_keywords, xml_types,  0, 0, 1 },
     { "svg",        xml_keywords, xml_types,  0, 0, 1 },
+    { "markup",     xml_keywords, xml_types,  0, 0, 1 },
     { NULL, NULL, NULL, 0, 0, 0 }
 };
 
