@@ -30,7 +30,7 @@ Test Markdown inputs (`test/*.md`) and their expected plain-text outputs (`test/
 To regenerate expected outputs after a rendering change:
 
 ```bash
-for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md test/test_blockquote.md test/test_highlight_c.md test/test_highlight_cpp.md test/test_highlight_java.md test/test_highlight_js.md test/test_highlight_cs.md test/test_highlight_vb.md test/test_highlight_json.md test/test_highlight_python.md; do
+for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md test/test_blockquote.md test/test_highlight_c.md test/test_highlight_cpp.md test/test_highlight_java.md test/test_highlight_js.md test/test_highlight_cs.md test/test_highlight_vb.md test/test_highlight_json.md test/test_highlight_python.md test/test_highlight_xml.md; do
     base="${f%.md}"
     TERM=xterm-256color LANG=C.UTF-8 ./visormd --cat "$f" > "${base}_expected.txt"
 done
@@ -58,6 +58,7 @@ done
 | `test_highlight_vb.md` | Visual Basic .NET: modules, classes, `Async`/`Await`, LINQ lambdas, `Using`, properties, `Imports`, XML literals |
 | `test_highlight_json.md` | JSON: strings, numbers (int, float, scientific), literals (`true`, `false`, `null`), nested objects and arrays |
 | `test_highlight_python.md` | Python 3.10+: keywords, builtins, `#` comments, `"""`/`'''` triple-quoted strings and docstrings, `_` digit separators (PEP 515), `j` complex suffix, f-strings, `@` decorators, `match`/`case` |
+| `test_highlight_xml.md` | XML/HTML: tags `<...>`, comments `<!-- -->` (multilínea), entidades `&...;`, atributos con comillas, tags auto-cerrados, CDATA, XML declaration |
 
 ## Architecture
 
@@ -100,7 +101,7 @@ The default mode is interactive (ncurses), even when reading from a pipe/redirec
    - Theme selector overlay (triggered by F2) is implemented as a static function in `renderer.c` since it needs intimate access to ncurses windows.
 
 6. **`src/highlight.c`** — Syntax highlighting for fenced code blocks:
-   - Maps language identifiers (`c`, `cpp`, `java`, `javascript`, `js`, `ts`, `python`, `py`, `cs`, `vb`, `json`, etc.) to keyword/type lists and tokenizer rules.
+   - Maps language identifiers (`c`, `cpp`, `java`, `javascript`, `js`, `ts`, `python`, `py`, `cs`, `vb`, `json`, `xml`, `html`, `svg`, etc.) to keyword/type lists and tokenizer rules.
    - Tokenizes per-line with a `HighlightState` that tracks multi-line comment (`/* */`) across lines.
    - Produces `SPAN_KW_*` spans: `KEYWORD`, `TYPE`, `STRING`, `COMMENT`, `NUMBER`, `PREPROC`.
    - For Bash (`bash`, `sh`, `zsh`), highlighting is still handled inline in `parser.c` (`parse_bash_line`) with the legacy `SPAN_BASH_*` spans.

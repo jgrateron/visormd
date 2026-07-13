@@ -14,6 +14,7 @@ typedef struct {
     const char **types;           /* array terminado en NULL */
     int          has_preprocessor; /* preprocesador (#include, #define...) */
     int          hash_comment;    /* # es comentario de línea (Python, Ruby...) */
+    int          is_xml;          /* lenguaje de markup XML/HTML */
 } LangDef;
 
 /* ──────────────────────────────────────────────
@@ -315,32 +316,48 @@ static const char *json_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * XML / HTML (markup simple: tags, comentarios, entidades)
+ * ────────────────────────────────────────────── */
+static const char *xml_keywords[] = {
+    NULL
+};
+
+static const char *xml_types[] = {
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
-    { "c",          c_keywords,   c_types,   1, 0 },
-    { "cpp",        cpp_keywords, cpp_types, 1, 0 },
-    { "c++",        cpp_keywords, cpp_types, 1, 0 },
-    { "cc",         cpp_keywords, cpp_types, 1, 0 },
-    { "cxx",        cpp_keywords, cpp_types, 1, 0 },
-    { "h",          c_keywords,   c_types,   1, 0 },
-    { "hpp",        cpp_keywords, cpp_types, 1, 0 },
-    { "java",       java_keywords,java_types, 0, 0 },
-    { "javascript", js_keywords,  js_types,   0, 0 },
-    { "js",         js_keywords,  js_types,   0, 0 },
-    { "ts",         js_keywords,  js_types,   0, 0 },
-    { "typescript", js_keywords,  js_types,   0, 0 },
-    { "cs",         cs_keywords,  cs_types,   0, 0 },
-    { "csharp",     cs_keywords,  cs_types,   0, 0 },
-    { "c#",         cs_keywords,  cs_types,   0, 0 },
-    { "vb",         vb_keywords,  vb_types,   0, 0 },
-    { "vbnet",      vb_keywords,  vb_types,   0, 0 },
-    { "vb.net",     vb_keywords,  vb_types,   0, 0 },
-    { "visualbasic",vb_keywords,  vb_types,   0, 0 },
-    { "json",       json_keywords,json_types, 0, 0 },
-    { "python",     py_keywords,  py_types,   0, 1 },
-    { "py",         py_keywords,  py_types,   0, 1 },
-    { NULL, NULL, NULL, 0, 0 }
+    { "c",          c_keywords,   c_types,   1, 0, 0 },
+    { "cpp",        cpp_keywords, cpp_types, 1, 0, 0 },
+    { "c++",        cpp_keywords, cpp_types, 1, 0, 0 },
+    { "cc",         cpp_keywords, cpp_types, 1, 0, 0 },
+    { "cxx",        cpp_keywords, cpp_types, 1, 0, 0 },
+    { "h",          c_keywords,   c_types,   1, 0, 0 },
+    { "hpp",        cpp_keywords, cpp_types, 1, 0, 0 },
+    { "java",       java_keywords,java_types, 0, 0, 0 },
+    { "javascript", js_keywords,  js_types,   0, 0, 0 },
+    { "js",         js_keywords,  js_types,   0, 0, 0 },
+    { "ts",         js_keywords,  js_types,   0, 0, 0 },
+    { "typescript", js_keywords,  js_types,   0, 0, 0 },
+    { "cs",         cs_keywords,  cs_types,   0, 0, 0 },
+    { "csharp",     cs_keywords,  cs_types,   0, 0, 0 },
+    { "c#",         cs_keywords,  cs_types,   0, 0, 0 },
+    { "vb",         vb_keywords,  vb_types,   0, 0, 0 },
+    { "vbnet",      vb_keywords,  vb_types,   0, 0, 0 },
+    { "vb.net",     vb_keywords,  vb_types,   0, 0, 0 },
+    { "visualbasic",vb_keywords,  vb_types,   0, 0, 0 },
+    { "json",       json_keywords,json_types, 0, 0, 0 },
+    { "python",     py_keywords,  py_types,   0, 1, 0 },
+    { "py",         py_keywords,  py_types,   0, 1, 0 },
+    { "xml",        xml_keywords, xml_types,  0, 0, 1 },
+    { "html",       xml_keywords, xml_types,  0, 0, 1 },
+    { "htm",        xml_keywords, xml_types,  0, 0, 1 },
+    { "xhtml",      xml_keywords, xml_types,  0, 0, 1 },
+    { "svg",        xml_keywords, xml_types,  0, 0, 1 },
+    { NULL, NULL, NULL, 0, 0, 0 }
 };
 
 /* ──────────────────────────────────────────────
@@ -448,6 +465,7 @@ static void cb_flush(CBuf *cb, ParsedLine *line, SpanType type) {
 void highlight_state_init(HighlightState *st) {
     st->in_block_comment = 0;
     st->in_triple_quote = 0;
+    st->in_xml_comment   = 0;
 }
 
 int highlight_supported(const char *lang) {
@@ -467,10 +485,125 @@ static const LangDef *find_lang(const char *lang) {
     return NULL;
 }
 
+/* ══════════════════════════════════════════════════════════════
+ * tokenizador XML/HTML (markup simple)
+ * ══════════════════════════════════════════════════════════════ */
+static int highlight_xml_line(ParsedLine *line, const char *text,
+                               HighlightState *st) {
+    int len = (int)strlen(text);
+    int i   = 0;
+    CBuf buf;
+    cb_init(&buf);
+
+    /* ── si venimos de un comentario XML abierto ── */
+    if (st->in_xml_comment) {
+        const char *end = strstr(text, "-->");
+        if (end) {
+            int comment_end = (int)(end - text) + 3;
+            char *comment = strndup(text, (size_t)comment_end);
+            emit_span(line, comment, SPAN_KW_COMMENT);
+            free(comment);
+            i = comment_end;
+            st->in_xml_comment = 0;
+        } else {
+            emit_span(line, text, SPAN_KW_COMMENT);
+            return 0;
+        }
+    }
+
+    while (i < len) {
+        /* ── comentario XML: <!-- ... --> ── */
+        if (text[i] == '<' && text[i+1] == '!' &&
+            text[i+2] == '-' && text[i+3] == '-') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i += 4;
+            const char *end = strstr(text + i, "-->");
+            if (end) {
+                i = (int)(end - text) + 3;
+                char *comment = strndup(text + start, (size_t)(i - start));
+                emit_span(line, comment, SPAN_KW_COMMENT);
+                free(comment);
+            } else {
+                emit_span(line, text + start, SPAN_KW_COMMENT);
+                st->in_xml_comment = 1;
+                return 0;
+            }
+            continue;
+        }
+
+        /* ── etiqueta XML: <...> ── */
+        if (text[i] == '<') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i++;
+            /* buscar el > de cierre respetando comillas */
+            int in_quote = 0;
+            char quote_char = 0;
+            while (i < len) {
+                if (in_quote) {
+                    if (text[i] == quote_char) in_quote = 0;
+                } else {
+                    if (text[i] == '"' || text[i] == '\'') {
+                        in_quote = 1;
+                        quote_char = text[i];
+                    } else if (text[i] == '>') {
+                        i++;
+                        break;
+                    }
+                }
+                i++;
+            }
+            char *tag = strndup(text + start, (size_t)(i - start));
+            emit_span(line, tag, SPAN_KW_KEYWORD);
+            free(tag);
+            continue;
+        }
+
+        /* ── entidad XML: &...; ── */
+        if (text[i] == '&') {
+            int start = i;
+            i++;
+            if (i < len && text[i] == '#') {
+                i++;
+                if (i < len && (text[i] == 'x' || text[i] == 'X'))
+                    i++;
+                while (i < len && (isalnum((unsigned char)text[i]) ||
+                                   text[i] == '_')) i++;
+            } else {
+                while (i < len && (isalnum((unsigned char)text[i]) ||
+                                   text[i] == '_')) i++;
+            }
+            if (i < len && text[i] == ';') {
+                i++;
+                cb_flush(&buf, line, SPAN_KW_NORMAL);
+                char *ent = strndup(text + start, (size_t)(i - start));
+                emit_span(line, ent, SPAN_KW_TYPE);
+                free(ent);
+                continue;
+            }
+            /* no es una entidad válida, tratar como normal */
+            i = start + 1;
+            cb_put(&buf, text[start]);
+            continue;
+        }
+
+        /* ── texto normal ── */
+        cb_put(&buf, text[i++]);
+    }
+
+    cb_flush(&buf, line, SPAN_KW_NORMAL);
+    return 0;
+}
+
 int highlight_line(ParsedLine *line, const char *text,
                    const char *lang, HighlightState *st) {
     const LangDef *ld = find_lang(lang);
     if (!ld || !line) return -1;
+
+    /* XML/HTML: usar tokenizador especializado */
+    if (ld->is_xml)
+        return highlight_xml_line(line, text, st);
 
     int   len = (int)strlen(text);
     int   i   = 0;

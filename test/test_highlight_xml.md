@@ -1,0 +1,66 @@
+# XML/HTML Highlight Test
+
+XML con tags, comentarios, atributos, entidades y CDATA.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Configuración principal de la aplicación -->
+<application name="VisorMD" version="1.0">
+    <!-- Base de datos -->
+    <database>
+        <host>localhost</host>
+        <port>5432</port>
+        <name>visormd_db</name>
+        <credentials user="admin" password="s3cr3t" />
+    </database>
+
+    <!-- Endpoints API -->
+    <api enabled="true">
+        <endpoint url="https://api.ejemplo.com/v1" timeout="30">
+            <headers>
+                <header name="Authorization">Bearer &lt;token&gt;</header>
+                <header name="Content-Type">application/json</header>
+            </headers>
+        </endpoint>
+    </api>
+
+    <!-- Plugins -->
+    <plugins>
+        <plugin name="syntax-highlight" version="2.0.1" />
+        <plugin name="live-preview" enabled="false" />
+        <plugin name="export-pdf"><![CDATA[
+            if (format == "pdf") {
+                exportDocument(doc);
+            }
+        ]]></plugin>
+    </plugins>
+</application>
+```
+
+HTML con entidades y tags anidados.
+
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisorMD &mdash; Visor Markdown</title>
+    <style>
+        body { font-family: sans-serif; }
+    </style>
+</head>
+<body>
+    <h1>Bienvenido a <strong>VisorMD</strong></h1>
+    <p class="lead">Un visor de Markdown para la terminal.</p>
+    <ul>
+        <li>Resaltado de sintaxis</li>
+        <li>Temas de color</li>
+        <li>Atajos <kbd>vim</kbd></li>
+    </ul>
+    <footer>
+        &copy; 2026 VisorMD &middot; MIT License
+    </footer>
+</body>
+</html>
+```
