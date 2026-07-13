@@ -3,6 +3,7 @@
 #include "parser.h"
 #include "renderer.h"
 #include <dirent.h>
+#include <errno.h>
 #include <glob.h>
 #include <locale.h>
 #include <stdio.h>
@@ -10,6 +11,9 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#define DEFAULT_RECURSIVE_DEPTH 10
+#define MAX_RECURSIVE_DEPTH     64
 
 static void usage(const char *prog) {
     fprintf(stderr,
@@ -19,8 +23,11 @@ static void usage(const char *prog) {
             "Acepta múltiples archivos, directorios (busca *.md) y patrones glob.\n"
             "\n"
             "Opciones:\n"
-            "  -c, --cat   Volcar el contenido renderizado a stdout y salir\n"
-            "  -h, --help  Mostrar esta ayuda\n"
+            "  -c, --cat        Volcar el contenido renderizado a stdout y salir\n"
+            "  -R, --recursive  Buscar archivos *.md recursivamente en directorios\n"
+            "                   (profundidad por defecto: %d, máx: %d)\n"
+            "                   Usa -R <n> para limitar, ej: -R 3\n"
+            "  -h, --help       Mostrar esta ayuda\n"
             "\n"
             "Teclas durante la visualización interactiva:\n"
             "  q         Salir\n"
@@ -41,11 +48,17 @@ static void usage(const char *prog) {
             "  %s README.md               # un solo archivo\n"
             "  %s -c README.md            # volcar a consola\n"
             "  %s docs/                   # todos los *.md en el directorio\n"
+            "  %s -R docs/                # búsqueda recursiva (profundidad %d)\n"
+            "  %s -R 2 docs/              # recursivo con profundidad 2\n"
             "  %s *.md                    # expansión shell de glob\n"
             "  %s README.md CHANGES.md    # múltiples archivos\n"
             "  cat README.md | %s         # pipe → interactivo\n"
             "  cat README.md | %s -c      # pipe → volcar a consola\n",
-            prog, prog, prog, prog, prog, prog, prog, prog);
+            prog,
+            DEFAULT_RECURSIVE_DEPTH, MAX_RECURSIVE_DEPTH,
+            prog, prog, prog, prog,
+            DEFAULT_RECURSIVE_DEPTH,
+            prog, prog, prog, prog, prog);
 }
 
 /* ──────────────────────────────────────────────
@@ -56,33 +69,145 @@ static int cmpstring(const void *a, const void *b) {
 }
 
 /* ──────────────────────────────────────────────
+ * construir ruta: dir + "/" + name
+ * evita doble slash si dir ya termina en /
+ * ────────────────────────────────────────────── */
+static char *build_path(const char *dir, const char *name) {
+    size_t dl = strlen(dir);
+    size_t nl = strlen(name);
+    int    has_slash = (dl > 0 && dir[dl - 1] == '/');
+    size_t total = dl + (has_slash ? 0 : 1) + nl + 1;
+    char *path = malloc(total);
+    if (has_slash)
+        snprintf(path, total, "%s%s", dir, name);
+    else
+        snprintf(path, total, "%s/%s", dir, name);
+    return path;
+}
+
+/* ──────────────────────────────────────────────
+ * escanear un directorio recursivamente en busca
+ * de archivos *.md hasta depth niveles
+ * ────────────────────────────────────────────── */
+static char **scan_dir_recursive(const char *dirpath, int depth,
+                                  int *out_count) {
+    DIR *dir = opendir(dirpath);
+    if (!dir) {
+        *out_count = 0;
+        return NULL;
+    }
+
+    int cap = 0, cnt = 0;
+    char **files   = NULL;
+    char **subdirs = NULL;
+    int    sub_cap = 0, sub_cnt = 0;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        const char *name = entry->d_name;
+        /* saltar . .. y ocultos */
+        if (name[0] == '.') continue;
+
+        size_t nl = strlen(name);
+        char *full = build_path(dirpath, name);
+        if (!full) continue;
+
+        /* ¿archivo .md? */
+        if (nl >= 3 && strcmp(name + nl - 3, ".md") == 0) {
+            if (cnt >= cap) {
+                cap = cap ? cap * 2 : 16;
+                files = realloc(files, sizeof(char *) * (size_t)(cap + 1));
+                if (!files) { free(full); goto error; }
+            }
+            files[cnt++] = full;
+            continue;
+        }
+
+        /* ¿subdirectorio? solo si queda profundidad */
+        if (depth > 1) {
+            struct stat st;
+            if (lstat(full, &st) == 0 && S_ISDIR(st.st_mode) &&
+                !S_ISLNK(st.st_mode)) {
+                if (sub_cnt >= sub_cap) {
+                    sub_cap = sub_cap ? sub_cap * 2 : 16;
+                    subdirs = realloc(subdirs,
+                                      sizeof(char *) * (size_t)(sub_cap + 1));
+                    if (!subdirs) { free(full); goto error; }
+                }
+                subdirs[sub_cnt++] = full;
+                continue;
+            }
+        }
+
+        free(full);
+    }
+    closedir(dir);
+
+    /* ── recurrir en subdirectorios ── */
+    for (int i = 0; i < sub_cnt; i++) {
+        int   sc = 0;
+        char **sf = scan_dir_recursive(subdirs[i], depth - 1, &sc);
+        free(subdirs[i]);
+        if (sf && sc > 0) {
+            for (int j = 0; j < sc; j++) {
+                if (cnt >= cap) {
+                    cap = cap ? cap * 2 : 16;
+                    files = realloc(files,
+                                    sizeof(char *) * (size_t)(cap + 1));
+                    if (!files) { free(sf); free(subdirs); goto error; }
+                }
+                files[cnt++] = sf[j];
+            }
+        }
+        free(sf);
+    }
+    free(subdirs);
+
+    if (cnt > 0) {
+        qsort(files, (size_t)cnt, sizeof(char *), cmpstring);
+        files[cnt] = NULL;
+        *out_count = cnt;
+        return files;
+    }
+    free(files);
+    *out_count = 0;
+    return NULL;
+
+error:
+    closedir(dir);
+    if (files) { for (int i = 0; i < cnt; i++) free(files[i]); free(files); }
+    if (subdirs) { for (int i = 0; i < sub_cnt; i++) free(subdirs[i]); free(subdirs); }
+    *out_count = 0;
+    return NULL;
+}
+
+/* ──────────────────────────────────────────────
  * expandir un argumento en una lista de archivos
  * - si es directorio → buscar *.md dentro
+ *   (recursivo si max_depth > 1)
  * - si contiene metacaracteres glob → glob()
  * - si es archivo regular → usarlo tal cual
  * retorna NULL si no se encontró nada
  * ────────────────────────────────────────────── */
-static char **expand_arg(const char *arg, int *out_count) {
+static char **expand_arg(const char *arg, int max_depth, int *out_count) {
     struct stat st;
     char **files = NULL;
     *out_count = 0;
 
     /* ¿es un directorio? */
     if (stat(arg, &st) == 0 && S_ISDIR(st.st_mode)) {
-        /* escanear en busca de *.md */
+        if (max_depth > 1)
+            return scan_dir_recursive(arg, max_depth, out_count);
+
+        /* escaneo no recursivo (comportamiento actual) */
         DIR *dir = opendir(arg);
         if (!dir) return NULL;
-
-        /* evitar doble slash: quitar / final si existe */
-        size_t arg_len = strlen(arg);
-        int has_slash = (arg_len > 0 && arg[arg_len - 1] == '/');
 
         int cap = 0, cnt = 0;
         struct dirent *entry;
         while ((entry = readdir(dir)) != NULL) {
             const char *name = entry->d_name;
             size_t nl = strlen(name);
-            /* solo archivos .md (ignorar ocultos) */
             if (nl < 3) continue;
             if (strcmp(name + nl - 3, ".md") != 0) continue;
             if (name[0] == '.') continue;
@@ -91,13 +216,7 @@ static char **expand_arg(const char *arg, int *out_count) {
                 cap = cap ? cap * 2 : 16;
                 files = realloc(files, sizeof(char *) * (size_t)(cap + 1));
             }
-            size_t pl = arg_len + 1 + nl + 1;
-            char *full = malloc(pl);
-            if (has_slash)
-                snprintf(full, pl, "%s%s", arg, name);
-            else
-                snprintf(full, pl, "%s/%s", arg, name);
-            files[cnt++] = full;
+            files[cnt++] = build_path(arg, name);
         }
         closedir(dir);
 
@@ -173,7 +292,8 @@ static int append_file(TextBuffer *buf, const char *filepath) {
 }
 
 int main(int argc, char **argv) {
-    int cat_mode = 0;
+    int cat_mode  = 0;
+    int max_depth = 1;   /* 1 = sin recursión, >1 = profundidad máxima */
 
     /* ── recolectar argumentos de archivo ── */
     char **file_args = malloc(sizeof(char *) * (size_t)(argc + 1));
@@ -188,6 +308,22 @@ int main(int argc, char **argv) {
         }
         if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--cat") == 0) {
             cat_mode = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "-R") == 0 || strcmp(argv[i], "--recursive") == 0) {
+            max_depth = DEFAULT_RECURSIVE_DEPTH;
+            /* ¿el siguiente argumento es un número? */
+            if (i + 1 < argc) {
+                char *end = NULL;
+                errno = 0;
+                long val = strtol(argv[i + 1], &end, 10);
+                if (end && *end == '\0' && errno == 0) {
+                    if (val < 1) val = 1;
+                    if (val > MAX_RECURSIVE_DEPTH) val = MAX_RECURSIVE_DEPTH;
+                    max_depth = (int)val;
+                    i++;  /* consumir el argumento numérico */
+                }
+            }
             continue;
         }
         if (argv[i][0] == '-') {
@@ -220,7 +356,7 @@ int main(int argc, char **argv) {
 
     for (int i = 0; i < file_count; i++) {
         int   n = 0;
-        char **expanded = expand_arg(file_args[i], &n);
+        char **expanded = expand_arg(file_args[i], max_depth, &n);
         if (!expanded) {
             fprintf(stderr, "%s: no se encontraron archivos para '%s'\n",
                     argv[0], file_args[i]);
