@@ -62,7 +62,7 @@ done
 
 ## Architecture
 
-VisorMD is a terminal-based interactive Markdown viewer, written in C11 with ncursesw. It reads a single Markdown file and presents it in a scrollable, color-coded terminal UI with vim-like keybindings.
+VisorMD is a terminal-based interactive Markdown viewer, written in C11 with ncursesw. It reads Markdown files (one or many) and presents them in a scrollable, color-coded terminal UI with vim-like keybindings. Accepts multiple files, directories (scans for `*.md`), and glob patterns.
 
 ### Data flow (pipeline)
 
@@ -73,7 +73,7 @@ File / stdin → TextBuffer (raw lines) → Parser (Document/ParsedLine/Spans) �
 
 The default mode is interactive (ncurses), even when reading from a pipe/redirect (stdin is reopened from `/dev/tty` for keyboard input). With `-c`/`--cat`, the pipeline branches to `cat_renderer` which dumps the document to stdout with ANSI escape codes and exits immediately — no ncurses dependency in that path.
 
-1. **`src/buffer.c`** — `TextBuffer`: reads a file (`buffer_load_file`) or stdin (`buffer_load_stdin`) into a dynamic array of raw UTF-8 strings (one per line). Owns the I/O and is discarded after parsing.
+1. **`src/buffer.c`** — `TextBuffer`: reads files (`buffer_load_file`), stdin (`buffer_load_stdin`), or appends individual lines (`buffer_add_line`) into a dynamic array of raw UTF-8 strings (one per line). Owns the I/O and is discarded after parsing.
 
 2. **`src/parser.c`** — Converts raw lines into a `Document` tree:
    - **Line-level** (`detect_line_type`): classifies each line as a heading (H1–H6), code block fence/content, horizontal rule, blockquote, unordered/ordered list, empty line, or paragraph. Handles code block state tracking across lines.
@@ -106,7 +106,7 @@ The default mode is interactive (ncurses), even when reading from a pipe/redirec
    - Produces `SPAN_KW_*` spans: `KEYWORD`, `TYPE`, `STRING`, `COMMENT`, `NUMBER`, `PREPROC`.
    - For Bash (`bash`, `sh`, `zsh`), highlighting is still handled inline in `parser.c` (`parse_bash_line`) with the legacy `SPAN_BASH_*` spans.
 
-7. **`src/main.c`** — Entry point: argument parsing (`-c`/`--cat` for stdout dump, `-h` for help, or a single filename), locale setup (tries `""`, `C.UTF-8`, `en_US.UTF-8` in that order). When no filename is given, reads from stdin (pipe/redirect); for interactive mode, reopens `/dev/tty` so ncurses can read keyboard input. Calls `cat_render()` and exits in cat mode; otherwise wires the pipeline through the ncurses renderer and runs the input loop until `q`.
+7. **`src/main.c`** — Entry point: argument parsing (`-c`/`--cat` for stdout dump, `-h` for help, plus one or more filenames, directories, or glob patterns). Multiple files are concatenated in the buffer with `## ====== ... ======` separators. Directories are scanned for `*.md` files (alphabetical order). Glob patterns (`*`, `?`, `[`) are expanded via `glob()`. Locale setup (tries `""`, `C.UTF-8`, `en_US.UTF-8` in that order). When no arguments given, reads from stdin (pipe/redirect); for interactive mode, reopens `/dev/tty` so ncurses can read keyboard input.
 
 ### Keybindings (hardcoded in `renderer_handle_input`)
 

@@ -12,5 +12,6 @@ TextBuffer *buffer_create(void);
 void        buffer_free(TextBuffer *buf);
 int         buffer_load_file(TextBuffer *buf, const char *filename);
 int         buffer_load_stdin(TextBuffer *buf);
+int         buffer_add_line(TextBuffer *buf, const char *line);
 
 #endif

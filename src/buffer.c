@@ -74,3 +74,15 @@ int buffer_load_stdin(TextBuffer *buf) {
     }
     return 0;
 }
+
+int buffer_add_line(TextBuffer *buf, const char *line) {
+    if (!buf || !line) return -1;
+    if (buf->count >= buf->capacity) {
+        buf->capacity = buf->capacity ? buf->capacity * 2 : 256;
+        char **tmp = realloc(buf->lines, sizeof(char *) * (size_t)buf->capacity);
+        if (!tmp) return -1;
+        buf->lines = tmp;
+    }
+    buf->lines[buf->count++] = strdup(line);
+    return 0;
+}
