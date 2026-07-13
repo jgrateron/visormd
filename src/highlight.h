@@ -6,6 +6,7 @@
 /* ── estado del resaltador (persiste entre líneas) ── */
 typedef struct {
     int in_block_comment;   /* dentro de un comentario / * ... * / */
+    int in_triple_quote;    /* dentro de un string triple: 1="""  2=''' */
 } HighlightState;
 
 /* ── inicializar el estado ── */

@@ -13,6 +13,7 @@ typedef struct {
     const char **keywords;        /* array terminado en NULL */
     const char **types;           /* array terminado en NULL */
     int          has_preprocessor; /* preprocesador (#include, #define...) */
+    int          hash_comment;    /* # es comentario de línea (Python, Ruby...) */
 } LangDef;
 
 /* ──────────────────────────────────────────────
@@ -261,6 +262,48 @@ static const char *vb_types[] = {
     NULL
 };
 
+/* ──────────────────────────────────────────────
+ * Python
+ * ────────────────────────────────────────────── */
+static const char *py_keywords[] = {
+    "False", "None", "True", "and", "as", "assert",
+    "async", "await", "break", "class", "continue",
+    "def", "del", "elif", "else", "except",
+    "finally", "for", "from", "global", "if",
+    "import", "in", "is", "lambda", "nonlocal",
+    "not", "or", "pass", "raise", "return",
+    "try", "while", "with", "yield",
+    "match", "case", "type",
+    NULL
+};
+
+static const char *py_types[] = {
+    "int", "float", "complex", "bool", "str",
+    "bytes", "bytearray", "memoryview",
+    "list", "tuple", "dict", "set", "frozenset",
+    "range", "slice", "object",
+    "Exception", "ValueError", "TypeError", "KeyError",
+    "IndexError", "AttributeError", "RuntimeError",
+    "StopIteration", "StopAsyncIteration",
+    "NotImplementedError", "ImportError", "OSError",
+    "FileNotFoundError", "PermissionError", "IsADirectoryError",
+    "ConnectionError", "TimeoutError",
+    "Warning", "DeprecationWarning", "FutureWarning",
+    "type", "super", "property", "staticmethod", "classmethod",
+    "any", "all", "enumerate", "filter", "map", "zip",
+    "sorted", "reversed", "iter", "next", "open",
+    "print", "input", "len", "abs", "round",
+    "min", "max", "sum", "divmod", "pow",
+    "isinstance", "issubclass", "hasattr", "getattr", "setattr",
+    "callable", "repr", "str", "format",
+    "bytes", "bytearray", "chr", "ord", "hex", "oct", "bin",
+    "id", "hash", "dir", "vars",
+    "IO", "TextIO", "BinaryIO",
+    "Path", "PathLike",
+    "self", "cls",
+    NULL
+};
+
 /* JSON */
 static const char *json_keywords[] = {
     "true", "false", "null",
@@ -275,27 +318,29 @@ static const char *json_types[] = {
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
-    { "c",          c_keywords,   c_types,   1 },
-    { "cpp",        cpp_keywords, cpp_types, 1 },
-    { "c++",        cpp_keywords, cpp_types, 1 },
-    { "cc",         cpp_keywords, cpp_types, 1 },
-    { "cxx",        cpp_keywords, cpp_types, 1 },
-    { "h",          c_keywords,   c_types,   1 },
-    { "hpp",        cpp_keywords, cpp_types, 1 },
-    { "java",       java_keywords,java_types, 0 },
-    { "javascript", js_keywords,  js_types,   0 },
-    { "js",         js_keywords,  js_types,   0 },
-    { "ts",         js_keywords,  js_types,   0 },
-    { "typescript", js_keywords,  js_types,   0 },
-    { "cs",         cs_keywords,  cs_types,   0 },
-    { "csharp",     cs_keywords,  cs_types,   0 },
-    { "c#",         cs_keywords,  cs_types,   0 },
-    { "vb",         vb_keywords,  vb_types,   0 },
-    { "vbnet",      vb_keywords,  vb_types,   0 },
-    { "vb.net",     vb_keywords,  vb_types,   0 },
-    { "visualbasic",vb_keywords,  vb_types,   0 },
-    { "json",       json_keywords,json_types, 0 },
-    { NULL, NULL, NULL, 0 }
+    { "c",          c_keywords,   c_types,   1, 0 },
+    { "cpp",        cpp_keywords, cpp_types, 1, 0 },
+    { "c++",        cpp_keywords, cpp_types, 1, 0 },
+    { "cc",         cpp_keywords, cpp_types, 1, 0 },
+    { "cxx",        cpp_keywords, cpp_types, 1, 0 },
+    { "h",          c_keywords,   c_types,   1, 0 },
+    { "hpp",        cpp_keywords, cpp_types, 1, 0 },
+    { "java",       java_keywords,java_types, 0, 0 },
+    { "javascript", js_keywords,  js_types,   0, 0 },
+    { "js",         js_keywords,  js_types,   0, 0 },
+    { "ts",         js_keywords,  js_types,   0, 0 },
+    { "typescript", js_keywords,  js_types,   0, 0 },
+    { "cs",         cs_keywords,  cs_types,   0, 0 },
+    { "csharp",     cs_keywords,  cs_types,   0, 0 },
+    { "c#",         cs_keywords,  cs_types,   0, 0 },
+    { "vb",         vb_keywords,  vb_types,   0, 0 },
+    { "vbnet",      vb_keywords,  vb_types,   0, 0 },
+    { "vb.net",     vb_keywords,  vb_types,   0, 0 },
+    { "visualbasic",vb_keywords,  vb_types,   0, 0 },
+    { "json",       json_keywords,json_types, 0, 0 },
+    { "python",     py_keywords,  py_types,   0, 1 },
+    { "py",         py_keywords,  py_types,   0, 1 },
+    { NULL, NULL, NULL, 0, 0 }
 };
 
 /* ──────────────────────────────────────────────
@@ -402,6 +447,7 @@ static void cb_flush(CBuf *cb, ParsedLine *line, SpanType type) {
 
 void highlight_state_init(HighlightState *st) {
     st->in_block_comment = 0;
+    st->in_triple_quote = 0;
 }
 
 int highlight_supported(const char *lang) {
@@ -450,6 +496,24 @@ int highlight_line(ParsedLine *line, const char *text,
         }
     }
 
+    /* ── si venimos de un string triple abierto (Python) ── */
+    if (st->in_triple_quote) {
+        const char *closer = (st->in_triple_quote == 1) ? "\"\"\"" : "'''";
+        const char *end = strstr(text, closer);
+        if (end) {
+            int str_end = (int)(end - text) + 3;
+            char *s = strndup(text, (size_t)str_end);
+            emit_span(line, s, SPAN_KW_STRING);
+            free(s);
+            i = str_end;
+            st->in_triple_quote = 0;
+        } else {
+            /* toda la línea es parte del string */
+            emit_span(line, text, SPAN_KW_STRING);
+            return 0;
+        }
+    }
+
     /* ── preprocesador (# al inicio de línea) ── */
     if (ld->has_preprocessor && is_preprocessor_line(text)) {
         emit_span(line, text, SPAN_KW_PREPROC);
@@ -471,6 +535,13 @@ int highlight_line(ParsedLine *line, const char *text,
             return 0;  /* resto de la línea es comentario */
         }
 
+        /* ── comentario de línea: # (Python, Ruby...) ── */
+        if (text[i] == '#' && ld->hash_comment) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, text + i, SPAN_KW_COMMENT);
+            return 0;  /* resto de la línea es comentario */
+        }
+
         /* ── comentario multilinea apertura: / * ── */
         if (text[i] == '/' && text[i + 1] == '*') {
             cb_flush(&buf, line, SPAN_KW_NORMAL);
@@ -486,6 +557,28 @@ int highlight_line(ParsedLine *line, const char *text,
                 /* multilínea que continúa en la siguiente línea */
                 emit_span(line, text + start, SPAN_KW_COMMENT);
                 st->in_block_comment = 1;
+                return 0;
+            }
+            continue;
+        }
+
+        /* ── string triple-comilla: """...""" o '''...''' (Python) ── */
+        if ((text[i] == '"' && text[i + 1] == '"' && text[i + 2] == '"') ||
+            (text[i] == '\'' && text[i + 1] == '\'' && text[i + 2] == '\'')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            const char *closer = (text[i] == '"') ? "\"\"\"" : "'''";
+            int start = i;
+            i += 3;
+            const char *end = strstr(text + i, closer);
+            if (end) {
+                i = (int)(end - text) + 3;
+                char *s = strndup(text + start, (size_t)(i - start));
+                emit_span(line, s, SPAN_KW_STRING);
+                free(s);
+            } else {
+                /* multilínea: continúa en la siguiente línea */
+                emit_span(line, text + start, SPAN_KW_STRING);
+                st->in_triple_quote = (text[start] == '"') ? 1 : 2;
                 return 0;
             }
             continue;
@@ -555,35 +648,35 @@ int highlight_line(ParsedLine *line, const char *text,
                 char nx = (char)tolower((unsigned char)text[i + 1]);
                 if (nx == 'x') {
                     i += 2;
-                    while (i < len && is_hex_digit(text[i])) i++;
+                    while (i < len && (is_hex_digit(text[i]) || text[i] == '_')) i++;
                     goto num_suffix;
                 }
                 if (nx == 'b') {
                     i += 2;
-                    while (i < len && is_bin_digit(text[i])) i++;
+                    while (i < len && (is_bin_digit(text[i]) || text[i] == '_')) i++;
                     goto num_suffix;
                 }
                 if (nx == 'o') {
                     i += 2;
-                    while (i < len && is_octal_digit(text[i])) i++;
+                    while (i < len && (is_octal_digit(text[i]) || text[i] == '_')) i++;
                     goto num_suffix;
                 }
             }
 
             /* parte entera */
-            while (i < len && isdigit((unsigned char)text[i])) i++;
+            while (i < len && (isdigit((unsigned char)text[i]) || text[i] == '_')) i++;
 
             /* parte fraccionaria */
             if (i < len && text[i] == '.') {
                 i++;
-                while (i < len && isdigit((unsigned char)text[i])) i++;
+                while (i < len && (isdigit((unsigned char)text[i]) || text[i] == '_')) i++;
             }
 
             /* exponente */
             if (i < len && (text[i] == 'e' || text[i] == 'E')) {
                 i++;
                 if (i < len && (text[i] == '+' || text[i] == '-')) i++;
-                while (i < len && isdigit((unsigned char)text[i])) i++;
+                while (i < len && (isdigit((unsigned char)text[i]) || text[i] == '_')) i++;
             }
 
         num_suffix:
@@ -594,6 +687,9 @@ int highlight_line(ParsedLine *line, const char *text,
 
             /* sufijo JS: n (BigInt) */
             if (i < len && text[i] == 'n') i++;
+
+            /* sufijo Python: j J (números complejos) */
+            if (i < len && (text[i] == 'j' || text[i] == 'J')) i++;
 
             char *num = strndup(text + start, (size_t)(i - start));
             emit_span(line, num, SPAN_KW_NUMBER);
