@@ -21,6 +21,30 @@ A terminal-based interactive Markdown viewer written in C11 with ncursesw. It re
 - **Smart word-wrap** — words stay whole when wrapping to the next line (togglable with `w`)
 - **Responsive** — handles terminal resize, line wrapping, and proportional column scaling for wide tables
 
+## Syntax Highlighting Preview
+
+VisorMD includes built-in syntax highlighting for fenced code blocks across a wide range of languages and formats:
+
+| C11 | C++ |
+|:---:|:---:|
+| ![C11](resources/img1.png) | ![C++](resources/img2.png) |
+
+| C# | Java |
+|:---:|:---:|
+| ![C#](resources/img3.png) | ![Java](resources/img4.png) |
+
+| JavaScript | JSON |
+|:---:|:---:|
+| ![JavaScript](resources/img5.png) | ![JSON](resources/img6.png) |
+
+| Python | VB .NET |
+|:---:|:---:|
+| ![Python](resources/img7.png) | ![VB .NET](resources/img8.png) |
+
+| XML / HTML |
+|:---:|
+| ![XML/HTML](resources/img9.png) |
+
 ## Requirements
 
 - **libncursesw** (wide-character ncurses)
