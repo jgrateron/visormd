@@ -1,0 +1,145 @@
+# SQL Highlight Test
+
+Exercises keywords, types, strings, numbers, comments (`--` and `/* */`), CTE, window functions.
+
+```sql
+-- Consulta con CTE y window functions
+WITH ranked_orders AS (
+    SELECT
+        c.customer_id,
+        c.name,
+        c.email,
+        o.order_id,
+        o.total_amount,
+        o.order_date,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.customer_id
+            ORDER BY o.order_date DESC
+        ) AS rn
+    FROM customers c
+    INNER JOIN orders o ON c.customer_id = o.customer_id
+    WHERE o.status IN ('completed', 'shipped')
+        AND o.total_amount > 100.00
+        AND c.active = TRUE
+)
+SELECT
+    customer_id,
+    name,
+    email,
+    order_id,
+    total_amount,
+    order_date
+FROM ranked_orders
+WHERE rn <= 5
+ORDER BY customer_id ASC, rn ASC;
+```
+
+## Table creation with constraints
+
+```sql
+CREATE TABLE products (
+    id            SERIAL PRIMARY KEY,
+    sku           VARCHAR(50)   NOT NULL UNIQUE,
+    name          VARCHAR(255)  NOT NULL,
+    description   TEXT,
+    price         NUMERIC(10,2) NOT NULL CHECK (price > 0),
+    cost          NUMERIC(10,2) DEFAULT 0,
+    category_id   INTEGER       REFERENCES categories(id),
+    tags          JSONB,
+    is_active     BOOLEAN       DEFAULT TRUE,
+    stock         INTEGER       DEFAULT 0,
+    weight_grams  REAL,
+    dimensions    GEOMETRY,
+    created_at    TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMPTZ
+);
+
+/* índice compuesto para búsquedas frecuentes
+   cubre: búsqueda por categoría + precio */
+CREATE INDEX idx_products_category_price
+    ON products (category_id, price DESC)
+    WHERE is_active = TRUE;
+```
+
+## DML operations
+
+```sql
+INSERT INTO products (sku, name, description, price, category_id, tags)
+VALUES
+    ('PRD-001', 'Widget Alpha', 'A premium widget', 29.99, 1, '["widget","premium"]'),
+    ('PRD-002', 'Widget Beta',  'Another widget',   19.99, 1, '["widget","basic"]'),
+    ('PRD-003', 'Gadget X',     'Fancy gadget',     49.99, 2, '["gadget"]');
+
+UPDATE products
+SET price = price * 1.10,
+    updated_at = CURRENT_TIMESTAMP
+WHERE category_id = 1
+  AND is_active = TRUE;
+```
+
+## Joins and subqueries
+
+```sql
+SELECT
+    p.name AS product_name,
+    c.name AS category_name,
+    p.price,
+    COALESCE(SUM(oi.quantity), 0) AS total_sold
+FROM products p
+LEFT JOIN categories c
+    ON p.category_id = c.id
+LEFT JOIN order_items oi
+    ON p.id = oi.product_id
+WHERE p.is_active = TRUE
+  AND p.price BETWEEN 10.00 AND 100.00
+GROUP BY p.id, p.name, c.name, p.price
+HAVING COALESCE(SUM(oi.quantity), 0) < 50
+ORDER BY total_sold DESC
+LIMIT 20;
+```
+
+## Numeric literals
+
+```sql
+SELECT
+    42                  AS integer_val,
+    3.14159             AS float_val,
+    1.5e10              AS scientific_val,
+    2.5e-3              AS scientific_neg,
+    0xFF                AS hex_val,
+    CAST('2026-07-21' AS DATE) AS today,
+    INTERVAL '7 days'   AS week;
+```
+
+## MySQL-specific: backtick identifiers and # comments
+
+```mysql
+# consulta con backtick identifiers
+SELECT
+    `u`.`id`,
+    `u`.`username`,
+    COUNT(`p`.`id`) AS `post_count`
+FROM `users` `u`
+LEFT JOIN `posts` `p`
+    ON `u`.`id` = `p`.`user_id`
+WHERE `u`.`active` = 1
+  AND `u`.`deleted_at` IS NULL
+GROUP BY `u`.`id`, `u`.`username`
+HAVING `post_count` > 0
+ORDER BY `post_count` DESC;
+```
+
+## PostgreSQL-specific: CAST, ILIKE, RETURNING
+
+```pgsql
+DELETE FROM products
+WHERE name ILIKE '%test%'
+  AND created_at < NOW() - INTERVAL '30 days'
+RETURNING id, sku, name;
+
+EXPLAIN ANALYZE
+SELECT *
+FROM products
+WHERE tags @> '["widget"]'::jsonb
+  AND price < 50;
+```

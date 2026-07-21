@@ -15,6 +15,7 @@ typedef struct {
     int          has_preprocessor; /* preprocesador (#include, #define...) */
     int          hash_comment;    /* # es comentario de línea (Python, Ruby...) */
     int          is_xml;          /* lenguaje de markup XML/HTML */
+    int          has_dash_comment; /* -- es comentario de línea (SQL) */
 } LangDef;
 
 /* ──────────────────────────────────────────────
@@ -327,38 +328,140 @@ static const char *xml_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * SQL
+ * ────────────────────────────────────────────── */
+static const char *sql_keywords[] = {
+    /* DML */
+    "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
+    "UPDATE", "SET", "DELETE", "MERGE", "REPLACE",
+    /* DDL */
+    "CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME",
+    "TABLE", "INDEX", "VIEW", "TRIGGER", "PROCEDURE",
+    "FUNCTION", "DATABASE", "SCHEMA", "COLUMN",
+    "ADD", "MODIFY", "TYPE", "OWNER",
+    /* DCL / TCL */
+    "GRANT", "REVOKE", "COMMIT", "ROLLBACK", "SAVEPOINT",
+    "BEGIN", "TRANSACTION", "SAVEPOINT",
+    /* cláusulas */
+    "GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC",
+    "LIMIT", "OFFSET", "FETCH", "NEXT", "ROWS", "ONLY",
+    "UNION", "ALL", "INTERSECT", "EXCEPT", "MINUS",
+    "DISTINCT", "DISTINCTROW",
+    /* joins */
+    "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER",
+    "CROSS", "NATURAL", "USING", "ON", "LATERAL",
+    /* lógica */
+    "AND", "OR", "NOT", "IN", "BETWEEN", "LIKE", "ILIKE",
+    "IS", "NULL", "EXISTS", "ANY", "SOME",
+    "TRUE", "FALSE", "UNKNOWN",
+    /* CASE */
+    "CASE", "WHEN", "THEN", "ELSE", "END",
+    /* constraints */
+    "PRIMARY", "KEY", "FOREIGN", "REFERENCES",
+    "UNIQUE", "CHECK", "CONSTRAINT", "DEFAULT",
+    "CASCADE", "RESTRICT", "NO", "ACTION",
+    "NULLS", "FIRST", "LAST",
+    /* CTE / window */
+    "WITH", "RECURSIVE", "AS",
+    "OVER", "PARTITION", "WINDOW", "RANGE", "ROWS",
+    "UNBOUNDED", "PRECEDING", "FOLLOWING", "CURRENT", "ROW",
+    /* otros */
+    "EXPLAIN", "ANALYZE", "ANALYSE", "VACUUM", "REINDEX",
+    "TEMPORARY", "TEMP", "MATERIALIZED", "IF",
+    "RETURNING", "CONFLICT", "DO", "NOTHING",
+    "UPSERT", "ON", "CONFLICT",
+    "CUBE", "ROLLUP", "GROUPING", "SETS",
+    "FILTER", "ARRAY", "AGGREGATE",
+    "ILIKE", "SIMILAR", "REGEXP", "RLIKE",
+    "ESCAPE",
+    "FOR", "SHARE", "NOWAIT", "SKIP", "LOCKED",
+    "ASC", "DESC", "NULLS",
+    "CALL", "EXEC", "EXECUTE",
+    "USE", "SHOW", "DESCRIBE", "DESC",
+    "REPLACE",
+    "ENGINE", "AUTO_INCREMENT", "CHARSET", "COLLATE",
+    "SEQUENCE", "GENERATED", "ALWAYS", "IDENTITY",
+    "CACHE", "CYCLE", "INCREMENT",
+    NULL
+};
+
+static const char *sql_types[] = {
+    "INT", "INTEGER", "SMALLINT", "BIGINT", "TINYINT",
+    "MEDIUMINT", "INT2", "INT4", "INT8",
+    "NUMERIC", "DECIMAL", "DEC", "REAL", "FLOAT",
+    "DOUBLE", "PRECISION", "FLOAT4", "FLOAT8",
+    "VARCHAR", "CHAR", "CHARACTER", "TEXT", "CLOB",
+    "TINYTEXT", "MEDIUMTEXT", "LONGTEXT",
+    "NVARCHAR", "NCHAR", "NVARCHAR2",
+    "BOOLEAN", "BOOL",
+    "DATE", "TIME", "TIMESTAMP", "DATETIME", "INTERVAL",
+    "TIMETZ", "TIMESTAMPTZ", "DATE",
+    "BLOB", "TINYBLOB", "MEDIUMBLOB", "LONGBLOB",
+    "BINARY", "VARBINARY", "BYTEA", "RAW",
+    "JSON", "JSONB",
+    "UUID",
+    "SERIAL", "BIGSERIAL", "SMALLSERIAL",
+    "SERIAL2", "SERIAL4", "SERIAL8",
+    "ARRAY", "ENUM", "SET",
+    "MONEY", "BIT",
+    "GEOMETRY", "GEOGRAPHY",
+    "POINT", "LINESTRING", "POLYGON",
+    "XML",
+    "UNIQUEIDENTIFIER", "ROWVERSION",
+    "SQL_VARIANT", "NTEXT", "IMAGE",
+    "OID", "REGCLASS", "REGPROC", "REGNAMESPACE",
+    "NAME", "BPCHAR",
+    "CITEXT", "INET", "CIDR", "MACADDR",
+    "TSVECTOR", "TSQUERY",
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
-    { "c",          c_keywords,   c_types,   1, 0, 0 },
-    { "cpp",        cpp_keywords, cpp_types, 1, 0, 0 },
-    { "c++",        cpp_keywords, cpp_types, 1, 0, 0 },
-    { "cc",         cpp_keywords, cpp_types, 1, 0, 0 },
-    { "cxx",        cpp_keywords, cpp_types, 1, 0, 0 },
-    { "h",          c_keywords,   c_types,   1, 0, 0 },
-    { "hpp",        cpp_keywords, cpp_types, 1, 0, 0 },
-    { "java",       java_keywords,java_types, 0, 0, 0 },
-    { "javascript", js_keywords,  js_types,   0, 0, 0 },
-    { "js",         js_keywords,  js_types,   0, 0, 0 },
-    { "ts",         js_keywords,  js_types,   0, 0, 0 },
-    { "typescript", js_keywords,  js_types,   0, 0, 0 },
-    { "cs",         cs_keywords,  cs_types,   0, 0, 0 },
-    { "csharp",     cs_keywords,  cs_types,   0, 0, 0 },
-    { "c#",         cs_keywords,  cs_types,   0, 0, 0 },
-    { "vb",         vb_keywords,  vb_types,   0, 0, 0 },
-    { "vbnet",      vb_keywords,  vb_types,   0, 0, 0 },
-    { "vb.net",     vb_keywords,  vb_types,   0, 0, 0 },
-    { "visualbasic",vb_keywords,  vb_types,   0, 0, 0 },
-    { "json",       json_keywords,json_types, 0, 0, 0 },
-    { "python",     py_keywords,  py_types,   0, 1, 0 },
-    { "py",         py_keywords,  py_types,   0, 1, 0 },
-    { "xml",        xml_keywords, xml_types,  0, 0, 1 },
-    { "html",       xml_keywords, xml_types,  0, 0, 1 },
-    { "htm",        xml_keywords, xml_types,  0, 0, 1 },
-    { "xhtml",      xml_keywords, xml_types,  0, 0, 1 },
-    { "svg",        xml_keywords, xml_types,  0, 0, 1 },
-    { "markup",     xml_keywords, xml_types,  0, 0, 1 },
-    { NULL, NULL, NULL, 0, 0, 0 }
+    { "c",          c_keywords,   c_types,   1, 0, 0, 0 },
+    { "cpp",        cpp_keywords, cpp_types, 1, 0, 0, 0 },
+    { "c++",        cpp_keywords, cpp_types, 1, 0, 0, 0 },
+    { "cc",         cpp_keywords, cpp_types, 1, 0, 0, 0 },
+    { "cxx",        cpp_keywords, cpp_types, 1, 0, 0, 0 },
+    { "h",          c_keywords,   c_types,   1, 0, 0, 0 },
+    { "hpp",        cpp_keywords, cpp_types, 1, 0, 0, 0 },
+    { "java",       java_keywords,java_types, 0, 0, 0, 0 },
+    { "javascript", js_keywords,  js_types,   0, 0, 0, 0 },
+    { "js",         js_keywords,  js_types,   0, 0, 0, 0 },
+    { "ts",         js_keywords,  js_types,   0, 0, 0, 0 },
+    { "typescript", js_keywords,  js_types,   0, 0, 0, 0 },
+    { "cs",         cs_keywords,  cs_types,   0, 0, 0, 0 },
+    { "csharp",     cs_keywords,  cs_types,   0, 0, 0, 0 },
+    { "c#",         cs_keywords,  cs_types,   0, 0, 0, 0 },
+    { "vb",         vb_keywords,  vb_types,   0, 0, 0, 0 },
+    { "vbnet",      vb_keywords,  vb_types,   0, 0, 0, 0 },
+    { "vb.net",     vb_keywords,  vb_types,   0, 0, 0, 0 },
+    { "visualbasic",vb_keywords,  vb_types,   0, 0, 0, 0 },
+    { "json",       json_keywords,json_types, 0, 0, 0, 0 },
+    { "python",     py_keywords,  py_types,   0, 1, 0, 0 },
+    { "py",         py_keywords,  py_types,   0, 1, 0, 0 },
+    { "xml",        xml_keywords, xml_types,  0, 0, 1, 0 },
+    { "html",       xml_keywords, xml_types,  0, 0, 1, 0 },
+    { "htm",        xml_keywords, xml_types,  0, 0, 1, 0 },
+    { "xhtml",      xml_keywords, xml_types,  0, 0, 1, 0 },
+    { "svg",        xml_keywords, xml_types,  0, 0, 1, 0 },
+    { "markup",     xml_keywords, xml_types,  0, 0, 1, 0 },
+    { "sql",        sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "mysql",      sql_keywords, sql_types,  0, 1, 0, 1 },
+    { "mariadb",    sql_keywords, sql_types,  0, 1, 0, 1 },
+    { "pgsql",      sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "postgresql", sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "postgres",   sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "plpgsql",    sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "sqlite",     sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "sqlite3",    sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "mssql",      sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "tsql",       sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "plsql",      sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "oracle",     sql_keywords, sql_types,  0, 0, 0, 1 },
+    { NULL, NULL, NULL, 0, 0, 0, 0 }
 };
 
 /* ──────────────────────────────────────────────
@@ -669,6 +772,13 @@ int highlight_line(ParsedLine *line, const char *text,
             return 0;  /* resto de la línea es comentario */
         }
 
+        /* ── comentario de línea: -- (SQL) ── */
+        if (text[i] == '-' && text[i + 1] == '-' && ld->has_dash_comment) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, text + i, SPAN_KW_COMMENT);
+            return 0;  /* resto de la línea es comentario */
+        }
+
         /* ── comentario de línea: # (Python, Ruby...) ── */
         if (text[i] == '#' && ld->hash_comment) {
             cb_flush(&buf, line, SPAN_KW_NORMAL);
@@ -751,12 +861,14 @@ int highlight_line(ParsedLine *line, const char *text,
             continue;
         }
 
-        /* ── template literal JS/TS: `...`  (solo para JS) ── */
+        /* ── template literal JS/TS y backtick identifiers MySQL ── */
         if (text[i] == '`' &&
             (strcmp(ld->name, "javascript") == 0 ||
              strcmp(ld->name, "js") == 0 ||
              strcmp(ld->name, "ts") == 0 ||
-             strcmp(ld->name, "typescript") == 0)) {
+             strcmp(ld->name, "typescript") == 0 ||
+             strcmp(ld->name, "mysql") == 0 ||
+             strcmp(ld->name, "mariadb") == 0)) {
             cb_flush(&buf, line, SPAN_KW_NORMAL);
             int start = i;
             i++;
