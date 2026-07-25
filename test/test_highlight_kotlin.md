@@ -1,0 +1,91 @@
+# Kotlin Highlight Test
+
+Data classes, sealed classes, null safety, lambdas, coroutines, and extension functions.
+
+```kotlin
+import kotlinx.coroutines.*
+import java.io.IOException
+
+/* Domain model with data classes and sealed hierarchies */
+data class User(
+    val id: Long,
+    val name: String,
+    val email: String?,
+    val role: Role = Role.GUEST
+)
+
+enum class Role { ADMIN, USER, GUEST }
+
+sealed class Result<out T> {
+    data class Success<T>(val data: T) : Result<T>()
+    data class Error(val message: String, val cause: Throwable? = null) : Result<Nothing>()
+}
+
+object UserRepository {
+    private val store: MutableMap<Long, User> = mutableMapOf()
+    private const val MAX_USERS = 1000
+
+    fun findById(id: Long): User? = store[id]
+
+    fun searchByName(query: String): List<User> {
+        return store.values.filter { user ->
+            user.name.contains(query, ignoreCase = true)
+        }
+    }
+
+    @Throws(IllegalStateException::class)
+    fun save(user: User) {
+        require(store.size < MAX_USERS) { "Store is full" }
+        store[user.id] = user
+    }
+}
+
+/* Extension functions */
+fun String.isValidEmail(): Boolean {
+    val pattern = Regex("""^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$""")
+    return pattern.matches(this)
+}
+
+/* Coroutine example */
+suspend fun fetchUsers(): List<User> = coroutineScope {
+    val deferred = async(Dispatchers.IO) {
+        delay(100L)
+        listOf(
+            User(1L, "Alice", "alice@example.com"),
+            User(2L, "Bob", "bob@example.com")
+        )
+    }
+    deferred.await()
+}
+
+/* Main with when expression and null safety */
+fun main() = runBlocking {
+    val repo = UserRepository
+    repo.save(User(1L, "Alice", "alice@example.com"))
+    repo.save(User(2L, "Bob", "bob@example.com"))
+
+    val user: User? = repo.findById(1L)
+    val name: String = user?.name ?: "Unknown"
+    val len: Int = name.length
+
+    // Smart cast with when expression
+    val result: Result<User> = Result.Success(User(3L, "Eve", null))
+    val message: String = when (result) {
+        is Result.Success -> "Found: ${result.data.name}"
+        is Result.Error -> "Error: ${result.message}"
+    }
+
+    println(message)
+    println("""Triple-quoted string with ${name} and $len chars""")
+
+    // Numeric literals
+    val dec: Int = 42
+    val hex: Long = 0xFF_EC_DE_5E
+    val bin: Int = 0b11010010
+    val float: Float = 3.14f
+    val exp: Double = 2.5e-3
+
+    val valid: Boolean = "alice@example.com".isValidEmail()
+    println("Email valid: $valid")
+}
+```

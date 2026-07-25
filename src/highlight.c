@@ -118,6 +118,49 @@ static const char *java_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * Kotlin
+ * ────────────────────────────────────────────── */
+static const char *kotlin_keywords[] = {
+    "fun", "val", "var", "class", "object",
+    "interface", "data", "sealed", "enum", "open",
+    "abstract", "override", "private", "protected",
+    "public", "internal", "companion", "inner",
+    "constructor", "init", "this", "super",
+    "if", "else", "when", "for", "while",
+    "do", "return", "break", "continue",
+    "try", "catch", "finally", "throw",
+    "true", "false", "null",
+    "is", "as", "in",
+    "package", "import", "typealias",
+    "suspend", "inline", "noinline", "crossinline",
+    "reified", "operator", "infix", "tailrec",
+    "vararg", "lateinit", "by", "dynamic",
+    "external", "annotation", "expect", "actual",
+    "it", "where",
+    NULL
+};
+
+static const char *kotlin_types[] = {
+    "Int", "Long", "Short", "Byte",
+    "Double", "Float", "Char", "Boolean", "String",
+    "Unit", "Nothing", "Any",
+    "Array", "List", "MutableList",
+    "Set", "MutableSet", "Map", "MutableMap",
+    "Sequence", "Pair", "Triple",
+    "IntArray", "LongArray", "ShortArray", "ByteArray",
+    "DoubleArray", "FloatArray", "CharArray", "BooleanArray",
+    "Regex",
+    "Throwable", "Exception", "RuntimeException",
+    "IllegalArgumentException", "IllegalStateException",
+    "NullPointerException", "IOException",
+    "StringBuilder",
+    "Comparable", "Iterator", "Iterable",
+    "Collection", "MutableCollection",
+    "Annotation", "Target", "Retention",
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * JavaScript / TypeScript
  * ────────────────────────────────────────────── */
 static const char *js_keywords[] = {
@@ -461,6 +504,9 @@ static const LangDef languages[] = {
     { "tsql",       sql_keywords, sql_types,  0, 0, 0, 1 },
     { "plsql",      sql_keywords, sql_types,  0, 0, 0, 1 },
     { "oracle",     sql_keywords, sql_types,  0, 0, 0, 1 },
+    { "kotlin",     kotlin_keywords, kotlin_types, 0, 0, 0, 0 },
+    { "kt",         kotlin_keywords, kotlin_types, 0, 0, 0, 0 },
+    { "kts",        kotlin_keywords, kotlin_types, 0, 0, 0, 0 },
     { NULL, NULL, NULL, 0, 0, 0, 0 }
 };
 
