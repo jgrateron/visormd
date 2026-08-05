@@ -141,6 +141,25 @@ When stdin is a pipe and interactive mode is used, the program reopens `/dev/tty
 | `F2` | Open theme selector |
 | `F4` | Toggle rendered view / raw Markdown source |
 
+### Mouse
+
+| Action | Behavior |
+|--------|----------|
+| Scroll wheel up / down | Scroll 3 lines per notch |
+| Left click on a line | Jump to that line |
+| Left click + drag | Select text; on release, the selection is copied to the system clipboard (OSC 52) |
+
+Mouse events require a terminal that reports them (xterm-compatible, e.g. xterm, gnome-terminal, konsole, iTerm2). Clicking on the status bar is ignored. The selected text is the rendered view (markdown delimiters stripped); table rows are copied cell-by-cell without separators.
+
+**Running inside tmux**: tmux captures the mouse for its own pane management unless it forwards events to the application. Enable it in `~/.tmux.conf`:
+
+```tmux
+set -g mouse on
+set -g set-clipboard on
+```
+
+`set-clipboard on` also forwards the OSC 52 clipboard sequence to your local terminal, so copy works over SSH. If your local terminal does not support OSC 52, tmux stores the text in its own buffer — paste it with `Ctrl-b ]`. As a fallback, hold Shift while dragging to select text natively in your terminal.
+
 ### Quick test
 
 ```bash
@@ -224,7 +243,7 @@ Ideas for future improvements, roughly ordered by impact.
 
 - **Line number styles** — relative numbers (`:set rnu`), absolute (`:set nu`), or hybrid (current line absolute, others relative). The `n` key could cycle through modes.
 
-- **Mouse support** — enable `ncurses` mouse events for scroll-wheel, click-to-position, and clickable links.
+- **Clickable links** — open link targets with the mouse (scroll-wheel and click-to-position already work).
 
 - **Hard-wrap paragraphs** — for `--cat` mode: reflow paragraphs to a fixed width (e.g. 72 columns) like `fmt -w 72`, independent of the terminal width.
 

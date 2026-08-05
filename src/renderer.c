@@ -74,6 +74,20 @@ struct Renderer {
     int         anchor_line;    /* línea donde empezó el último scroll_page */
     int         anchor_skip;
 
+    /* selección con ratón */
+    int         sel_active;     /* 1 = selección en curso o recién terminada */
+    int         sel_done;       /* 1 = ya copiada: el rectángulo persiste
+                                     hasta la siguiente interacción */
+    int         sel_start_x;    /* columna inicial (screen coords) */
+    int         sel_start_y;    /* fila inicial */
+    int         sel_end_x;      /* columna final (se actualiza durante drag) */
+    int         sel_end_y;      /* fila final */
+    int         flash_copy;     /* 1 = mostrar "copiado" en la barra de estado */
+    MEVENT      last_mouse;     /* último evento de ratón (getmouse solo lo
+                                     devuelve una vez; getch lo guarda aquí
+                                     para que el handler lo use) */
+    int         mouse_valid;    /* 1 = last_mouse contiene un evento nuevo */
+
     /* líneas crudas (texto original sin parsear) */
     char      **raw_lines;
     int         raw_count;
@@ -1244,7 +1258,10 @@ static int raw_line_wrapped_rows(Renderer *r, int line_idx, int avail_w);
  * ────────────────────────────────────────────── */
 static void draw_status(Renderer *r) {
     werase(r->status_win);
-    wbkgd(r->status_win, COLOR_PAIR(CP_STATUSBAR));
+    /* flash "copiado": invertir la barra completa para que el aviso sea
+       visible incluso con la barra llena */
+    wbkgd(r->status_win,
+          COLOR_PAIR(CP_STATUSBAR) | (r->flash_copy ? A_REVERSE : 0));
 
     /* calcular porcentaje visual */
     int total = total_visual_rows(r);
@@ -1271,10 +1288,13 @@ static void draw_status(Renderer *r) {
     int line_count = r->show_raw ? r->raw_count : r->doc->count;
     const char *mode_str = r->show_raw ? "[F4]render" : "[F4]crudo";
 
+    /* el aviso de copiado va al inicio de la barra: así se ve siempre,
+       aunque el resto de la barra se trunque por el ancho del terminal */
     mvwprintw(r->status_win, 0, 0,
-              " visormd  %s  L%d/%d  %d%%  %s  [q]uit [r]eload [arrows/jk] "
+              " visormd  %s%s  L%d/%d  %d%%  %s  [q]uit [r]eload [arrows/jk] "
               "[PgUp/PgDn] [g/G] [n]ums [w]rap [F1]acerca [F2]tema",
               show,
+              r->flash_copy ? "  ✔ copiado" : "",
               r->scroll_line + 1, line_count,
               pct, mode_str);
     wrefresh(r->status_win);
@@ -1301,6 +1321,14 @@ Renderer *renderer_create(Document *doc, const char *filename,
     r->scroll_skip  = 0;
     r->anchor_line  = 0;
     r->anchor_skip  = 0;
+    r->sel_active   = 0;
+    r->sel_done     = 0;
+    r->sel_start_x  = 0;
+    r->sel_start_y  = 0;
+    r->sel_end_x    = 0;
+    r->sel_end_y    = 0;
+    r->flash_copy   = 0;
+    r->mouse_valid  = 0;
 
     /* iniciar ncurses */
     initscr();
@@ -1308,6 +1336,18 @@ Renderer *renderer_create(Document *doc, const char *filename,
     noecho();
     curs_set(0);
     keypad(stdscr, TRUE);
+
+    /* habilitar eventos de ratón (rueda, clicks y drag).
+       REPORT_MOUSE_POSITION permite que ncurses entregue los eventos de
+       movimiento con botón pulsado (modo drag 1002) como KEY_MOUSE */
+    mousemask(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION, NULL);
+    /* reducir la latencia de ESC: las secuencias de ratón empiezan con ESC */
+    set_escdelay(25);
+    /* ncurses solo activa el modo 1000 (press/release); añadir el modo 1002
+       (drag: movimiento con botón pulsado) para seleccionar con el ratón.
+       Los terminales que no lo soporten lo ignoran sin consecuencias. */
+    printf("\033[?1002h");
+    fflush(stdout);
 
     if (has_colors()) {
         start_color();
@@ -1341,6 +1381,9 @@ void renderer_free(Renderer *r) {
     free(r->filename);
     delwin(r->main_win);
     delwin(r->status_win);
+    /* desactivar el modo drag de ratón (ver renderer_create) */
+    printf("\033[?1002l");
+    fflush(stdout);
     endwin();
     free(r);
 }
@@ -1348,6 +1391,10 @@ void renderer_free(Renderer *r) {
 void renderer_resize(Renderer *r) {
     endwin();
     refresh();
+    /* endwin() desactiva el modo de ratón de ncurses; re-activar el modo
+       drag 1002 (ver renderer_create) */
+    printf("\033[?1002h");
+    fflush(stdout);
 
     r->term_w = getmaxx(stdscr);
     r->term_h = getmaxy(stdscr);
@@ -1382,6 +1429,8 @@ void renderer_resize(Renderer *r) {
     }
 }
 
+static void renderer_draw_selection(Renderer *r);
+
 /* ──────────────────────────────────────────────
  * dibujar el documento completo
  * ────────────────────────────────────────────── */
@@ -1415,6 +1464,8 @@ void renderer_draw(Renderer *r) {
     }
 
     draw_status(r);
+    if (r->sel_active)
+        renderer_draw_selection(r);
     wrefresh(r->main_win);
 }
 
@@ -1446,6 +1497,324 @@ static int raw_line_wrapped_rows(Renderer *r, int line_idx, int avail_w) {
     free(breaks);
     free(wbuf);
     return rows > 0 ? rows : 1;
+}
+
+/* ── mapear fila de pantalla (0 = inicio del área de contenido) al índice
+   de la línea fuente (cruda o parseada) y a la sub-fila visual dentro de
+   esa línea (para reconstruir la posición del texto) ── */
+static int screen_row_to_line_and_subrow(Renderer *r, int screen_row,
+                                         int *out_subrow) {
+    int sl        = r->scroll_line;
+    int skip      = r->scroll_skip;
+    int visual    = 0;
+    int avail_w   = avail_width(r);
+    int line_count = r->show_raw ? r->raw_count : r->doc->count;
+
+    while (sl < line_count) {
+        int lr;
+        if (r->show_raw)
+            lr = raw_line_wrapped_rows(r, sl, avail_w);
+        else
+            lr = line_wrapped_rows(&r->doc->lines[sl], avail_w, r->wrap_words);
+
+        /* solo la primera línea visible puede tener skip */
+        int visible = lr - skip;
+        if (visual + visible > screen_row) {
+            if (out_subrow)
+                *out_subrow = skip + (screen_row - visual);
+            return sl;
+        }
+        visual += visible;
+        sl++;
+        skip = 0;
+    }
+    if (out_subrow) *out_subrow = 0;
+    return line_count > 0 ? line_count - 1 : 0;
+}
+
+static int screen_row_to_source_line(Renderer *r, int screen_row) {
+    return screen_row_to_line_and_subrow(r, screen_row, NULL);
+}
+
+/* ──────────────────────────────────────────────
+ * selección de texto con ratón y portapapeles
+ * ────────────────────────────────────────────── */
+
+/* ── append a un buffer dinámico (strcat con crecimiento) ── */
+static void buf_append(char **buf, size_t *len, size_t *cap, const char *s) {
+    size_t slen = strlen(s);
+    if (*len + slen + 1 > *cap) {
+        size_t ncap = (*cap > 0) ? *cap : 64;
+        while (ncap < *len + slen + 1) ncap *= 2;
+        char *nb = realloc(*buf, ncap);
+        if (!nb) return;
+        *buf = nb;
+        *cap = ncap;
+    }
+    memcpy(*buf + *len, s, slen);
+    *len += slen;
+    (*buf)[*len] = '\0';
+}
+
+/* ── convertir wide chars de vuelta a UTF-8 (inverso de utf8_to_wide) ── */
+static int wide_to_utf8(const wchar_t *wcs, int wlen, char *out, int out_cap) {
+    int o = 0;
+    mbstate_t st;
+    memset(&st, 0, sizeof(st));
+    for (int i = 0; i < wlen; i++) {
+        char tmp[MB_CUR_MAX > 8 ? MB_CUR_MAX : 8];
+        size_t n = wcrtomb(tmp, wcs[i], &st);
+        if (n == (size_t)-1) continue;
+        if (o + (int)n >= out_cap) break;
+        memcpy(out + o, tmp, n);
+        o += (int)n;
+    }
+    out[o] = '\0';
+    return o;
+}
+
+/* ── texto completo de una línea fuente (spans concatenados, sin pipes) ── */
+static char *line_full_text(Renderer *r, int line_idx) {
+    if (r->show_raw) {
+        const char *txt = r->raw_lines[line_idx];
+        return strdup(txt ? txt : "");
+    }
+    ParsedLine *line = &r->doc->lines[line_idx];
+    size_t len = 0, cap = 64;
+    char *buf = malloc(cap);
+    if (!buf) return NULL;
+    for (int s = 0; s < line->span_count; s++) {
+        if (line->spans[s].type == SPAN_TABLE_PIPE) continue;
+        const char *t = line->spans[s].text;
+        size_t tl = strlen(t);
+        if (len + tl + 1 > cap) {
+            while (len + tl + 1 > cap) cap *= 2;
+            char *nb = realloc(buf, cap);
+            if (!nb) { free(buf); return NULL; }
+            buf = nb;
+        }
+        memcpy(buf + len, t, tl);
+        len += tl;
+    }
+    buf[len] = '\0';
+    return buf;
+}
+
+/* ── rebanada de texto de una sub-fila visual de una línea fuente, para el
+   rango de columnas de pantalla [x1, x2]. Reconstruye el mismo wrap que el
+   renderizado (flatten + build_visual_lines) y mapea las celdas de pantalla
+   a caracteres del texto.
+   next_selected: indica si la sub-fila siguiente también está seleccionada
+   (solo entonces se restaura el espacio que el wrap descartó). ── */
+static char *subrow_slice(Renderer *r, int line_idx, int subrow,
+                          int x1, int x2, int next_selected) {
+    int margin  = r->show_numbers ? 6 : 2;
+    int avail_w = r->term_w - margin;
+    if (avail_w < 1) avail_w = 1;
+
+    wchar_t *chars = NULL;
+    chtype  *attrs = NULL;
+    int      total = 0;
+    int      list_ind = 0;
+
+    if (r->show_raw) {
+        const char *txt = r->raw_lines[line_idx];
+        if (!txt) return strdup("");
+        int len = (int)strlen(txt);
+        chars = malloc(sizeof(wchar_t) * (size_t)(len + 1));
+        if (!chars) return NULL;
+        total = utf8_to_wide(txt, len, chars, len + 1);
+    } else {
+        ParsedLine *line = &r->doc->lines[line_idx];
+        list_ind = list_marker_width(line);
+        total = flatten_spans(line, &chars, &attrs);
+    }
+
+    if (total <= 0) {
+        free(chars);
+        free(attrs);
+        return strdup("");
+    }
+
+    int *breaks = NULL;
+    int nlines = build_visual_lines(chars, total, avail_w, r->wrap_words,
+                                    list_ind, &breaks);
+    if (nlines <= 0 || subrow >= nlines) {
+        free(chars); free(attrs); free(breaks);
+        return strdup("");
+    }
+
+    int start = breaks[subrow];
+    int end   = (subrow + 1 < nlines) ? breaks[subrow + 1] : total;
+
+    /* word-wrap descarta el espacio que disparó el corte entre sub-filas
+       (build_visual_lines hace pos++): el espacio queda en el rango
+       [start, end) pero no se dibuja. Excluirlo y restaurarlo exactamente
+       una vez si la sub-fila siguiente también está seleccionada. */
+    int dropped_space = (r->wrap_words && subrow + 1 < nlines &&
+                         breaks[subrow + 1] - 1 >= start &&
+                         chars[breaks[subrow + 1] - 1] == L' ');
+    if (dropped_space)
+        end = breaks[subrow + 1] - 1;
+
+    /* columna de pantalla donde empieza esta sub-fila */
+    int x0 = margin + ((subrow > 0) ? list_ind : 0);
+
+    /* caracteres cuyas celdas se solapan con [x1, x2] */
+    int col = x0, cstart = end, cend = end;
+    for (int i = start; i < end && col <= x2; i++) {
+        int cw = wcwidth(chars[i]);
+        if (cw < 0) cw = 1;
+        int right = col + cw;
+        if (right > x1 && col <= x2) {
+            if (cstart == end) cstart = i;
+            cend = i + 1;
+        }
+        col = right;
+    }
+    if (cstart == end) cstart = end;
+
+    /* convertir el rango [cstart, cend) de vuelta a UTF-8 */
+    int max_bytes = (cend - cstart) * MB_CUR_MAX + 2;
+    char *out = malloc((size_t)max_bytes);
+    if (out)
+        wide_to_utf8(chars + cstart, cend - cstart, out, max_bytes);
+
+    /* restaurar el espacio descartado por el wrap, si procede */
+    if (out && dropped_space && next_selected) {
+        size_t l = strlen(out);
+        if (l + 2 <= (size_t)max_bytes) {
+            out[l] = ' ';
+            out[l + 1] = '\0';
+        }
+    }
+
+    free(chars); free(attrs); free(breaks);
+    return out;
+}
+
+/* ── texto seleccionado: mapea el rectángulo de pantalla a las líneas
+   fuente y reconstruye el texto tal y como se ve ── */
+static char *extract_selected_text(Renderer *r) {
+    int y1 = (r->sel_start_y < r->sel_end_y) ? r->sel_start_y : r->sel_end_y;
+    int y2 = (r->sel_start_y < r->sel_end_y) ? r->sel_end_y : r->sel_start_y;
+    int x1 = (r->sel_start_x < r->sel_end_x) ? r->sel_start_x : r->sel_end_x;
+    int x2 = (r->sel_start_x < r->sel_end_x) ? r->sel_end_x : r->sel_start_x;
+
+    if (y1 < 0) y1 = 0;
+    if (y2 >= r->content_h) y2 = r->content_h - 1;
+    if (y1 > y2) return strdup("");
+
+    /* filas del documento visibles; las de más allá están vacías */
+    int content_rows = total_visual_rows(r);
+
+    char *out = NULL;
+    size_t out_len = 0, out_cap = 0;
+    int prev_line = -1;
+
+    for (int y = y1; y <= y2; y++) {
+        if (y >= content_rows) break;   /* zona vacía al final del documento */
+
+        int subrow = 0;
+        int li = screen_row_to_line_and_subrow(r, y, &subrow);
+
+        int fx1 = (y == y1) ? x1 : 0;
+        int fx2 = (y == y2) ? x2 : r->term_w - 1;
+
+        char *frag = NULL;
+        /* tablas: texto completo de la línea (los pipes/padding hacen
+           imprecisa la extracción por columnas) */
+        if (!r->show_raw) {
+            ParsedLine *line = &r->doc->lines[li];
+            if (line->type == LINE_TABLE_HEADER ||
+                line->type == LINE_TABLE_ROW)
+                frag = line_full_text(r, li);
+        }
+        if (!frag)
+            frag = subrow_slice(r, li, subrow, fx1, fx2, (y + 1 <= y2));
+        if (!frag) continue;
+
+        /* salto de línea entre líneas fuente; las sub-filas de una misma
+           línea se unen sin separador (wrap "blando") */
+        if (prev_line != -1 && li != prev_line)
+            buf_append(&out, &out_len, &out_cap, "\n");
+        buf_append(&out, &out_len, &out_cap, frag);
+        free(frag);
+        prev_line = li;
+    }
+
+    return out ? out : strdup("");
+}
+
+/* ── overlay visual: invertir las celdas del rectángulo seleccionado
+   preservando los atributos (color) de cada celda ── */
+static void renderer_draw_selection(Renderer *r) {
+    int y1 = (r->sel_start_y < r->sel_end_y) ? r->sel_start_y : r->sel_end_y;
+    int y2 = (r->sel_start_y < r->sel_end_y) ? r->sel_end_y : r->sel_start_y;
+    int x1 = (r->sel_start_x < r->sel_end_x) ? r->sel_start_x : r->sel_end_x;
+    int x2 = (r->sel_start_x < r->sel_end_x) ? r->sel_end_x : r->sel_start_x;
+
+    if (y1 < 0) y1 = 0;
+    if (y2 >= r->content_h) y2 = r->content_h - 1;
+    if (x1 < 0) x1 = 0;
+    if (x2 >= r->term_w) x2 = r->term_w - 1;
+    if (y1 > y2 || x1 > x2) return;
+
+    for (int y = y1; y <= y2; y++) {
+        int c1 = (y == y1) ? x1 : 0;
+        int c2 = (y == y2) ? x2 : r->term_w - 1;
+        for (int x = c1; x <= c2; x++) {
+            chtype ch = mvwinch(r->main_win, y, x);
+            mvwchgat(r->main_win, y, x, 1,
+                     (ch & A_ATTRIBUTES) | A_REVERSE, 0, NULL);
+        }
+    }
+}
+
+/* ── base64 (necesario para OSC 52) ── */
+static const char b64_table[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static char *base64_encode(const unsigned char *data, size_t len) {
+    size_t out_len = ((len + 2) / 3) * 4 + 1;
+    char *out = malloc(out_len);
+    if (!out) return NULL;
+    size_t i = 0, j = 0;
+    while (i + 3 <= len) {
+        unsigned v = ((unsigned)data[i] << 16) |
+                     ((unsigned)data[i + 1] << 8) | data[i + 2];
+        out[j++] = b64_table[(v >> 18) & 63];
+        out[j++] = b64_table[(v >> 12) & 63];
+        out[j++] = b64_table[(v >> 6) & 63];
+        out[j++] = b64_table[v & 63];
+        i += 3;
+    }
+    if (len - i == 1) {
+        unsigned v = (unsigned)data[i] << 16;
+        out[j++] = b64_table[(v >> 18) & 63];
+        out[j++] = b64_table[(v >> 12) & 63];
+        out[j++] = '=';
+        out[j++] = '=';
+    } else if (len - i == 2) {
+        unsigned v = ((unsigned)data[i] << 16) |
+                     ((unsigned)data[i + 1] << 8);
+        out[j++] = b64_table[(v >> 18) & 63];
+        out[j++] = b64_table[(v >> 12) & 63];
+        out[j++] = b64_table[(v >> 6) & 63];
+        out[j++] = '=';
+    }
+    out[j] = '\0';
+    return out;
+}
+
+/* ── copiar al portapapeles del sistema vía OSC 52 ── */
+static void copy_to_clipboard(const char *text) {
+    if (!text || !*text) return;
+    char *b64 = base64_encode((const unsigned char *)text, strlen(text));
+    if (!b64) return;
+    printf("\033]52;c;%s\007", b64);
+    fflush(stdout);
+    free(b64);
 }
 
 /* avanzar N filas visuales */
@@ -1542,6 +1911,13 @@ static void renderer_reload(Renderer *r) {
 }
 
 int renderer_handle_input(Renderer *r, int ch) {
+    /* cualquier tecla limpia la selección persistente y el aviso de copiado */
+    if (ch != KEY_MOUSE && ch != KEY_RESIZE) {
+        if (r->sel_active) r->sel_active = 0;
+        if (r->sel_done) r->sel_done = 0;
+        r->flash_copy = 0;
+    }
+
     switch (ch) {
     case 'q':
     case 'Q':
@@ -1620,6 +1996,9 @@ int renderer_handle_input(Renderer *r, int ch) {
         break;
 
     case KEY_RESIZE:
+        /* las coordenadas de pantalla cambian: descartar la selección */
+        r->sel_active = 0;
+        r->sel_done = 0;
         renderer_resize(r);
         break;
 
@@ -1636,6 +2015,65 @@ int renderer_handle_input(Renderer *r, int ch) {
         /* resetear scroll al cambiar de vista */
         r->scroll_line = 0;
         r->scroll_skip = 0;
+        break;
+
+    case KEY_MOUSE:
+        {
+            /* el evento fue capturado por renderer_getch (getmouse() solo
+               lo devuelve una vez) */
+            MEVENT event = r->last_mouse;
+            r->mouse_valid = 0;
+            if (event.bstate & BUTTON4_PRESSED) {
+                    /* rueda hacia arriba */
+                    scroll_up(r, 3);
+                } else if (event.bstate & BUTTON5_PRESSED) {
+                    /* rueda hacia abajo */
+                    scroll_down(r, 3);
+                } else if (event.bstate & BUTTON1_PRESSED) {
+                    /* botón izquierdo: iniciar una selección nueva
+                       (reemplaza cualquier selección previa) */
+                    if (event.y < r->content_h) {
+                        r->sel_active = 1;
+                        r->sel_done   = 0;
+                        r->sel_start_x = event.x;
+                        r->sel_start_y = event.y;
+                        r->sel_end_x = event.x;
+                        r->sel_end_y = event.y;
+                    }
+                } else if (event.bstate & REPORT_MOUSE_POSITION) {
+                    /* movimiento con el botón pulsado (modo drag 1002):
+                       actualizar el extremo de la selección en curso */
+                    if (r->sel_active && !r->sel_done) {
+                        r->sel_end_x = event.x;
+                        r->sel_end_y = event.y;
+                    }
+                } else if (event.bstate & BUTTON1_RELEASED) {
+                    if (r->sel_active && !r->sel_done) {
+                        if (abs(r->sel_end_x - r->sel_start_x) <= 1 &&
+                            abs(r->sel_end_y - r->sel_start_y) <= 1) {
+                            /* sin arrastre: click → saltar a la línea */
+                            r->sel_active = 0;
+                            if (event.y < r->content_h) {
+                                r->scroll_line =
+                                    screen_row_to_source_line(r, event.y);
+                                r->scroll_skip = 0;
+                            }
+                        } else {
+                            /* hubo arrastre: copiar la selección.
+                               El rectángulo persiste (sel_done) hasta la
+                               siguiente tecla o click, para que el usuario
+                               vea qué texto se copió. */
+                            char *text = extract_selected_text(r);
+                            if (text) {
+                                copy_to_clipboard(text);
+                                free(text);
+                            }
+                            r->flash_copy = 1;
+                            r->sel_done = 1;
+                        }
+                    }
+                }
+        }
         break;
 
     default:
@@ -1950,6 +2388,23 @@ static void about_show(Renderer *r) {
 }
 
 int renderer_getch(Renderer *r) {
-    (void)r;
-    return wgetch(stdscr);
+    for (;;) {
+        int ch = wgetch(stdscr);
+        if (ch == KEY_MOUSE) {
+            MEVENT e;
+            if (getmouse(&e) == OK) {
+                /* getmouse() solo devuelve el evento una vez: guardarlo
+                   aquí para que renderer_handle_input lo consuma */
+                r->last_mouse = e;
+                r->mouse_valid = 1;
+                /* descartar eventos de movimiento sin botón ni selección
+                   en curso: evita un redibujado por cada píxel del ratón */
+                if ((e.bstate & REPORT_MOUSE_POSITION) &&
+                    !(e.bstate & ~REPORT_MOUSE_POSITION) &&
+                    !(r->sel_active && !r->sel_done))
+                    continue;
+            }
+        }
+        return ch;
+    }
 }
