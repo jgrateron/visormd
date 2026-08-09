@@ -16,6 +16,7 @@ typedef struct {
     int          hash_comment;    /* # es comentario de línea (Python, Ruby...) */
     int          is_xml;          /* lenguaje de markup XML/HTML */
     int          has_dash_comment; /* -- es comentario de línea (SQL) */
+    int          is_gherkin;      /* Gherkin: @tags, <placeholders>, * pasos */
 } LangDef;
 
 /* ──────────────────────────────────────────────
@@ -460,54 +461,77 @@ static const char *sql_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * Gherkin (Cucumber): features, escenarios y pasos
+ * ────────────────────────────────────────────── */
+static const char *gherkin_keywords[] = {
+    /* estructuras */
+    "Feature", "Rule", "Background",
+    "Scenario", "Outline", "Example", "Examples",
+    /* pasos */
+    "Given", "When", "Then", "And", "But",
+    /* español */
+    "Característica", "Regla", "Antecedentes",
+    "Escenario", "Esquema", "Ejemplos",
+    "Dado", "Dada", "Dados", "Dadas",
+    "Cuando", "Entonces", "Y", "Pero",
+    NULL
+};
+
+static const char *gherkin_types[] = {
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
-    { "c",          c_keywords,   c_types,   1, 0, 0, 0 },
-    { "cpp",        cpp_keywords, cpp_types, 1, 0, 0, 0 },
-    { "c++",        cpp_keywords, cpp_types, 1, 0, 0, 0 },
-    { "cc",         cpp_keywords, cpp_types, 1, 0, 0, 0 },
-    { "cxx",        cpp_keywords, cpp_types, 1, 0, 0, 0 },
-    { "h",          c_keywords,   c_types,   1, 0, 0, 0 },
-    { "hpp",        cpp_keywords, cpp_types, 1, 0, 0, 0 },
-    { "java",       java_keywords,java_types, 0, 0, 0, 0 },
-    { "javascript", js_keywords,  js_types,   0, 0, 0, 0 },
-    { "js",         js_keywords,  js_types,   0, 0, 0, 0 },
-    { "ts",         js_keywords,  js_types,   0, 0, 0, 0 },
-    { "typescript", js_keywords,  js_types,   0, 0, 0, 0 },
-    { "cs",         cs_keywords,  cs_types,   0, 0, 0, 0 },
-    { "csharp",     cs_keywords,  cs_types,   0, 0, 0, 0 },
-    { "c#",         cs_keywords,  cs_types,   0, 0, 0, 0 },
-    { "vb",         vb_keywords,  vb_types,   0, 0, 0, 0 },
-    { "vbnet",      vb_keywords,  vb_types,   0, 0, 0, 0 },
-    { "vb.net",     vb_keywords,  vb_types,   0, 0, 0, 0 },
-    { "visualbasic",vb_keywords,  vb_types,   0, 0, 0, 0 },
-    { "json",       json_keywords,json_types, 0, 0, 0, 0 },
-    { "python",     py_keywords,  py_types,   0, 1, 0, 0 },
-    { "py",         py_keywords,  py_types,   0, 1, 0, 0 },
-    { "xml",        xml_keywords, xml_types,  0, 0, 1, 0 },
-    { "html",       xml_keywords, xml_types,  0, 0, 1, 0 },
-    { "htm",        xml_keywords, xml_types,  0, 0, 1, 0 },
-    { "xhtml",      xml_keywords, xml_types,  0, 0, 1, 0 },
-    { "svg",        xml_keywords, xml_types,  0, 0, 1, 0 },
-    { "markup",     xml_keywords, xml_types,  0, 0, 1, 0 },
-    { "sql",        sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "mysql",      sql_keywords, sql_types,  0, 1, 0, 1 },
-    { "mariadb",    sql_keywords, sql_types,  0, 1, 0, 1 },
-    { "pgsql",      sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "postgresql", sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "postgres",   sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "plpgsql",    sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "sqlite",     sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "sqlite3",    sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "mssql",      sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "tsql",       sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "plsql",      sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "oracle",     sql_keywords, sql_types,  0, 0, 0, 1 },
-    { "kotlin",     kotlin_keywords, kotlin_types, 0, 0, 0, 0 },
-    { "kt",         kotlin_keywords, kotlin_types, 0, 0, 0, 0 },
-    { "kts",        kotlin_keywords, kotlin_types, 0, 0, 0, 0 },
-    { NULL, NULL, NULL, 0, 0, 0, 0 }
+    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0 },
+    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0 },
+    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0 },
+    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0 },
+    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0 },
+    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0 },
+    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0 },
+    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0 },
+    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0 },
+    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0 },
+    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0 },
+    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0 },
+    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0 },
+    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0 },
+    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0 },
+    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0 },
+    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0 },
+    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0 },
+    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0 },
+    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0 },
+    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0 },
+    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0 },
+    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0 },
+    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0 },
+    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0 },
+    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0 },
+    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0 },
+    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0 },
+    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0 },
+    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0 },
+    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0 },
+    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0 },
+    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0 },
+    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0 },
+    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1 },
+    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1 },
+    { NULL, NULL, NULL, 0, 0, 0, 0, 0 }
 };
 
 /* ──────────────────────────────────────────────
@@ -832,6 +856,35 @@ int highlight_line(ParsedLine *line, const char *text,
             return 0;  /* resto de la línea es comentario */
         }
 
+        /* ── tag de Gherkin: @nombre (solo al inicio de línea, tras
+           espacios: evita resaltar emails dentro de pasos) ── */
+        if (ld->is_gherkin && text[i] == '@' &&
+            (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\t')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i++;
+            while (i < len && (isalnum((unsigned char)text[i]) ||
+                               text[i] == '_' || text[i] == '-'))
+                i++;
+            char *tag = strndup(text + start, (size_t)(i - start));
+            emit_span(line, tag, SPAN_KW_PREPROC);
+            free(tag);
+            continue;
+        }
+
+        /* ── placeholder de Gherkin: <var> ── */
+        if (ld->is_gherkin && text[i] == '<') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i++;
+            while (i < len && text[i] != '>') i++;
+            if (i < len) i++;  /* '>' de cierre */
+            char *ph = strndup(text + start, (size_t)(i - start));
+            emit_span(line, ph, SPAN_KW_TYPE);
+            free(ph);
+            continue;
+        }
+
         /* ── comentario multilinea apertura: / * ── */
         if (text[i] == '/' && text[i + 1] == '*') {
             cb_flush(&buf, line, SPAN_KW_NORMAL);
@@ -993,8 +1046,11 @@ int highlight_line(ParsedLine *line, const char *text,
         if (isalpha((unsigned char)text[i]) || text[i] == '_') {
             cb_flush(&buf, line, SPAN_KW_NORMAL);
             int start = i;
+            /* bytes >= 0x80: permitir UTF-8 dentro de la palabra
+               (p. ej. keywords de Gherkin acentuadas como "Característica") */
             while (i < len &&
-                   (isalnum((unsigned char)text[i]) || text[i] == '_'))
+                   (isalnum((unsigned char)text[i]) || text[i] == '_' ||
+                    (unsigned char)text[i] >= 0x80))
                 i++;
             char *word = strndup(text + start, (size_t)(i - start));
 
@@ -1006,6 +1062,14 @@ int highlight_line(ParsedLine *line, const char *text,
                 emit_span(line, word, SPAN_KW_NORMAL);
 
             free(word);
+            continue;
+        }
+
+        /* ── marcador de paso de Gherkin: * ── */
+        if (ld->is_gherkin && text[i] == '*') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, "*", SPAN_KW_KEYWORD);
+            i++;
             continue;
         }
 

@@ -1,0 +1,86 @@
+# Gherkin Highlight Test
+
+Exercises features, scenarios, steps (Given/When/Then/And/But/*), tags, placeholders, Examples tables, docstrings, comments and Spanish keywords.
+
+```gherkin
+@login @regression
+Feature: Autenticación de usuarios
+
+  Background:
+    Given un usuario registrado en el sistema
+    And existe una base de datos de credenciales
+
+  # escenario feliz
+  Scenario: Login con credenciales válidas
+    Given un usuario no autenticado
+    When envía credenciales válidas
+    Then llega al panel principal
+
+  Scenario Outline: Acceso según rol
+    Given el usuario con rol <rol>
+    When intenta abrir <seccion>
+    Then ve el contenido <esperado>
+    But no ve <restringido>
+
+    Examples:
+      | rol      | seccion | esperado | restringido |
+      | admin    | panel   | panel    | auditoria   |
+      | invitado | home    | home     | admin       |
+
+  Scenario: Fallo de autenticación
+    Given un usuario no autenticado
+    When envía credenciales inválidas
+    Then recibe un error 401
+    And permanece en la pantalla de login
+```
+
+## Rule y docstring multilínea
+
+```gherkin
+  Rule: El bloqueo tras intentos fallidos
+
+    Scenario: Tres intentos fallidos
+      Given un usuario que falla 3 veces
+      When envía credenciales válidas
+      Then se muestra un mensaje de bloqueo
+      * la sesión no se inicia
+
+    @api
+    Scenario: Respuesta JSON del endpoint
+      Given una petición POST a /login
+      When el servidor valida las credenciales
+      Then responde:
+        """json
+        {
+          "status": "ok",
+          "token": "abc123"
+        }
+        """
+```
+
+## Keywords en español
+
+```gherkin
+# resaltado con el dialecto español de Gherkin
+Característica: Compra de productos
+
+  Antecedentes:
+    Dado que el catálogo está disponible
+    Y que el carrito está vacío
+
+  Escenario: Añadir un producto al carrito
+    Dado que el usuario está en la tienda
+    Cuando añade 2 unidades del producto
+    Entonces el carrito tiene 2 unidades
+    Pero el stock no se descuenta todavía
+
+  Esquema del escenario: Descuentos por categoría
+    Dado el producto con precio <precio>
+    Cuando aplica el cupón <cupon>
+    Entonces el total es <total>
+
+    Ejemplos:
+      | precio | cupon  | total |
+      | 100.00 | VERANO | 80.00 |
+      | 50.00  | 10%    | 45.00 |
+```
