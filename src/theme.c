@@ -403,31 +403,34 @@ int config_get_path(char *buf, size_t bufsz) {
     return -1;  /* no hay dónde guardar */
 }
 
-int config_load_theme(void) {
+/* ── leer el valor de una clave en el archivo de configuración.
+   retorna una copia malloc'd, o NULL si la clave no existe.
+   (el caller libera la copia) ── */
+static char *config_read_value(const char *key) {
     char path[1024];
-    if (config_get_path(path, sizeof(path)) != 0) return 0;
+    if (config_get_path(path, sizeof(path)) != 0) return NULL;
 
     FILE *fp = fopen(path, "r");
-    if (!fp) return 0;  /* archivo no existe → default */
+    if (!fp) return NULL;   /* archivo no existe */
 
-    char line[256];
-    int  idx = 0;
+    size_t keylen = strlen(key);
+    char   line[256];
+    char   *value = NULL;
 
     while (fgets(line, sizeof(line), fp)) {
         /* ignorar comentarios */
         if (line[0] == '#') continue;
 
-        /* buscar "theme=" */
         char *eq = strchr(line, '=');
         if (!eq) continue;
 
         /* extraer clave */
-        size_t keylen = (size_t)(eq - line);
-        while (keylen > 0 &&
-               (line[keylen - 1] == ' ' || line[keylen - 1] == '\t'))
-            keylen--;
+        size_t klen = (size_t)(eq - line);
+        while (klen > 0 &&
+               (line[klen - 1] == ' ' || line[klen - 1] == '\t'))
+            klen--;
 
-        if (keylen != 5 || strncmp(line, "theme", 5) != 0) continue;
+        if (klen != keylen || strncmp(line, key, keylen) != 0) continue;
 
         /* extraer valor (saltear espacios después del '=') */
         char *val = eq + 1;
@@ -442,12 +445,33 @@ int config_load_theme(void) {
 
         if (vlen == 0) continue;
 
-        int found = theme_find_by_id(val);
-        if (found >= 0) idx = found;
+        value = strdup(val);
+        break;
     }
 
     fclose(fp);
+    return value;
+}
+
+int config_load_theme(void) {
+    int   idx = 0;
+    char *val = config_read_value("theme");
+    if (val) {
+        int found = theme_find_by_id(val);
+        if (found >= 0) idx = found;
+        free(val);
+    }
     return idx;
+}
+
+int config_load_mouse(void) {
+    int   on  = 0;   /* por defecto: ratón desactivado */
+    char *val = config_read_value("mouse");
+    if (val) {
+        if (strcmp(val, "on") == 0) on = 1;
+        free(val);
+    }
+    return on;
 }
 
 /* ── crear directorios recursivamente (como mkdir -p) ── */
@@ -468,7 +492,9 @@ static int mkdir_p(const char *path, mode_t mode) {
     return 0;
 }
 
-int config_save_theme(const char *theme_id) {
+/* ── guardar una clave en el archivo de configuración preservando las
+   demás (escribir a un .tmp y renombrar: atómico) ── */
+static int config_save_key(const char *key, const char *value) {
     char path[1024];
     if (config_get_path(path, sizeof(path)) != 0) return -1;
 
@@ -481,10 +507,41 @@ int config_save_theme(const char *theme_id) {
         if (mkdir_p(dir, 0755) != 0) return -1;
     }
 
-    FILE *fp = fopen(path, "w");
-    if (!fp) return -1;
+    /* copiar el archivo actual omitiendo la línea de esta clave */
+    char tmp_path[1100];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
 
-    fprintf(fp, "theme=%s\n", theme_id ? theme_id : "default");
-    fclose(fp);
-    return 0;
+    FILE *in  = fopen(path, "r");
+    FILE *out = fopen(tmp_path, "w");
+    if (!out) {
+        if (in) fclose(in);
+        return -1;
+    }
+
+    if (in) {
+        size_t keylen = strlen(key);
+        char   line[256];
+        while (fgets(line, sizeof(line), in)) {
+            char *eq = strchr(line, '=');
+            if (eq) {
+                size_t klen = (size_t)(eq - line);
+                while (klen > 0 &&
+                       (line[klen - 1] == ' ' || line[klen - 1] == '\t'))
+                    klen--;
+                if (klen == keylen && strncmp(line, key, keylen) == 0)
+                    continue;   /* esta línea se regenera abajo */
+            }
+            fputs(line, out);
+        }
+        fclose(in);
+    }
+
+    fprintf(out, "%s=%s\n", key, value);
+    fclose(out);
+
+    return rename(tmp_path, path);
+}
+
+int config_save_theme(const char *theme_id) {
+    return config_save_key("theme", theme_id ? theme_id : "default");
 }

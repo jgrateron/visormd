@@ -143,6 +143,8 @@ When stdin is a pipe and interactive mode is used, the program reopens `/dev/tty
 
 ### Mouse
 
+Mouse support is **disabled by default**; enable it by adding `mouse=on` to the configuration file (see [Configuration](#configuration)). When disabled, the mouse is handed back to the terminal (native selection still works).
+
 | Action | Behavior |
 |--------|----------|
 | Scroll wheel up / down | Scroll 3 lines per notch |
@@ -183,13 +185,19 @@ Files / dirs / globs / stdin → TextBuffer (raw lines) → Parser (Document/Par
 
 ## Configuration
 
-The selected theme is saved to `$XDG_CONFIG_HOME/visormd/config` (or `~/.config/visormd/config`). The file contains a single line:
+Settings live in `$XDG_CONFIG_HOME/visormd/config` (or `~/.config/visormd/config`), one `key=value` per line. Lines starting with `#` are ignored. The selected theme is saved there when you pick it with F2:
 
 ```
 theme=gruvbox
 ```
 
 Available theme IDs: `default`, `monochrome`, `solarized-dark`, `solarized-light`, `nord`, `gruvbox`, `one-light`, `dracula`, `one-dark`.
+
+Mouse support is off by default; enable it with:
+
+```
+mouse=on
+```
 
 ## Table support
 

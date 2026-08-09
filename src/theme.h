@@ -59,6 +59,7 @@ int          theme_find_by_id(const char *id);
 /* ── archivo de configuración ── */
 int config_get_path(char *buf, size_t bufsz);
 int config_load_theme(void);
+int config_load_mouse(void);   /* 1 = "mouse=on", 0 en cualquier otro caso */
 int config_save_theme(const char *theme_id);
 
 #endif

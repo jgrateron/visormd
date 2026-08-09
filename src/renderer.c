@@ -97,6 +97,7 @@ struct Renderer {
     int         wrap_words;     /* toggle con 'w' */
     int         show_raw;       /* toggle con F4: 0=renderizado, 1=crudo */
     int         theme_idx;      /* índice en themes[] */
+    int         mouse_enabled;  /* 1 = ratón habilitado (config "mouse=on") */
 };
 
 /* ──────────────────────────────────────────────
@@ -1329,6 +1330,7 @@ Renderer *renderer_create(Document *doc, const char *filename,
     r->sel_end_y    = 0;
     r->flash_copy   = 0;
     r->mouse_valid  = 0;
+    r->mouse_enabled = 0;
 
     /* iniciar ncurses */
     initscr();
@@ -1337,17 +1339,21 @@ Renderer *renderer_create(Document *doc, const char *filename,
     curs_set(0);
     keypad(stdscr, TRUE);
 
-    /* habilitar eventos de ratón (rueda, clicks y drag).
-       REPORT_MOUSE_POSITION permite que ncurses entregue los eventos de
-       movimiento con botón pulsado (modo drag 1002) como KEY_MOUSE */
-    mousemask(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION, NULL);
-    /* reducir la latencia de ESC: las secuencias de ratón empiezan con ESC */
-    set_escdelay(25);
-    /* ncurses solo activa el modo 1000 (press/release); añadir el modo 1002
-       (drag: movimiento con botón pulsado) para seleccionar con el ratón.
-       Los terminales que no lo soporten lo ignoran sin consecuencias. */
-    printf("\033[?1002h");
-    fflush(stdout);
+    /* habilitar eventos de ratón (rueda, clicks y drag) solo si la
+       configuración lo pide ("mouse=on"). REPORT_MOUSE_POSITION permite
+       que ncurses entregue los eventos de movimiento con botón pulsado
+       (modo drag 1002) como KEY_MOUSE */
+    r->mouse_enabled = config_load_mouse();
+    if (r->mouse_enabled) {
+        mousemask(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION, NULL);
+        /* reducir la latencia de ESC: las secuencias de ratón empiezan con ESC */
+        set_escdelay(25);
+        /* ncurses solo activa el modo 1000 (press/release); añadir el modo 1002
+           (drag: movimiento con botón pulsado) para seleccionar con el ratón.
+           Los terminales que no lo soporten lo ignoran sin consecuencias. */
+        printf("\033[?1002h");
+        fflush(stdout);
+    }
 
     if (has_colors()) {
         start_color();
@@ -1382,8 +1388,10 @@ void renderer_free(Renderer *r) {
     delwin(r->main_win);
     delwin(r->status_win);
     /* desactivar el modo drag de ratón (ver renderer_create) */
-    printf("\033[?1002l");
-    fflush(stdout);
+    if (r->mouse_enabled) {
+        printf("\033[?1002l");
+        fflush(stdout);
+    }
     endwin();
     free(r);
 }
@@ -1393,8 +1401,10 @@ void renderer_resize(Renderer *r) {
     refresh();
     /* endwin() desactiva el modo de ratón de ncurses; re-activar el modo
        drag 1002 (ver renderer_create) */
-    printf("\033[?1002h");
-    fflush(stdout);
+    if (r->mouse_enabled) {
+        printf("\033[?1002h");
+        fflush(stdout);
+    }
 
     r->term_w = getmaxx(stdscr);
     r->term_h = getmaxy(stdscr);
