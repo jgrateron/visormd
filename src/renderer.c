@@ -584,6 +584,17 @@ static int total_visual_rows(Renderer *r) {
     return total;
 }
 
+/* ── desplazamiento horizontal para centrar una tabla en presentación
+   (las tablas usan su ancho natural cuando caben; si se encogen para
+   llenar todo el ancho disponible el offset es 0) ── */
+static int table_center_offset(Renderer *r, const int *adj_w, int ncols,
+                               int avail_w) {
+    if (!r->center_slide) return 0;
+    int table_w = ncols + 1;   /* separadores: ncols-1 internos + 2 bordes */
+    for (int c = 0; c < ncols; c++) table_w += adj_w[c];
+    return table_w < avail_w ? (avail_w - table_w) / 2 : 0;
+}
+
 /* ──────────────────────────────────────────────
  * renderizar una línea fuente en pantalla
  * retorna cuántas filas de pantalla se usaron
@@ -674,7 +685,7 @@ static int render_source_line(Renderer *r, int line_idx,
         int wl_h = utf8_to_wide("─",   3,                  w_h,     4);
 
         chtype attr = COLOR_PAIR(CP_TABLE_BORDER);
-        int sx = margin;
+        int sx = margin + table_center_offset(r, adj_w, ncols, avail_w);
 
         /* borde izquierdo */
         if (wl_l > 0 && sx < r->term_w) {
@@ -848,7 +859,7 @@ static int render_source_line(Renderer *r, int line_idx,
             else
                 clear_line_number(r, sy);
 
-            int sx = margin;
+            int sx = margin + table_center_offset(r, adj_w, ncols, avail_w);
 
             /* borde izquierdo */
             if (sx < r->term_w) {

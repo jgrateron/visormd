@@ -144,7 +144,7 @@ When stdin is a pipe and interactive mode is used, the program reopens `/dev/tty
 
 ### Presentation mode
 
-Press `p` to enter presentation mode. The document is split into full-screen slides on `#` level-1 headings and `---` horizontal rules: the rule is consumed as a separator (not drawn) and the heading becomes the slide title. Empty slides are skipped, short slides are vertically centered, and slides taller than the screen are truncated (a ▼ marker appears in the status bar). Rows are horizontally centered by default (code blocks and tables keep their alignment); toggle centering with `c`. Line numbers are temporarily hidden and restored on exit.
+Press `p` to enter presentation mode. The document is split into full-screen slides on `#` level-1 headings and `---` horizontal rules: the rule is consumed as a separator (not drawn) and the heading becomes the slide title. Empty slides are skipped, short slides are vertically centered, and slides taller than the screen are truncated (a ▼ marker appears in the status bar). Rows are horizontally centered by default (code blocks keep their alignment; tables are centered as a block when they fit, or stretched to full width); toggle centering with `c`. Line numbers are temporarily hidden and restored on exit.
 
 | Key | Action |
 |-----|--------|
