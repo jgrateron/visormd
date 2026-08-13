@@ -88,7 +88,7 @@ The default mode is interactive (ncurses), even when reading from a pipe/redirec
    - Scroll state is tracked as `(scroll_line, scroll_skip)` — a line index plus how many wrapped sub-rows to skip within that line. This handles line wrapping at any terminal width.
    - `renderer_draw` iterates from the scroll position, renders each source line (with wrapping) until the screen is filled, then draws the status bar.
    - Terminal resize is handled via `KEY_RESIZE` → `renderer_resize`, which re-measures and re-clamps scroll state.
-   - Presentation mode (`p` → `presentation_show`) splits the document into slides at H1 headings (kept as slide titles) and `---` rules (consumed as separators); slides are vertically centered or truncated with a ▼ marker, shown with a centered `Diapositiva X/Y` status bar.
+   - Presentation mode (`p` → `presentation_show`) splits the document into slides at H1 headings (kept as slide titles) and `---` rules (consumed as separators); slides are vertically centered or truncated with a ▼ marker, rows are horizontally centered (`center_slide`, toggled with `c`; code and tables excluded), shown with a centered `Diapositiva X/Y` status bar.
 
 4. **`src/cat_renderer.c`** — Non-interactive stdout renderer (triggered by `-c`/`--cat`):
    - Iterates the parsed `Document` and writes each `ParsedLine` to stdout.

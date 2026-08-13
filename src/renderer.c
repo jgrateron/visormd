@@ -98,6 +98,7 @@ struct Renderer {
     int         show_raw;       /* toggle con F4: 0=renderizado, 1=crudo */
     int         theme_idx;      /* índice en themes[] */
     int         mouse_enabled;  /* 1 = ratón habilitado (config "mouse=on") */
+    int         center_slide;   /* 1 = centrar filas (modo presentación) */
 };
 
 /* ──────────────────────────────────────────────
@@ -1056,6 +1057,20 @@ static int render_source_line(Renderer *r, int line_idx,
 
                     /* líneas de continuación de lista llevan sangría */
                     int sx = margin + ((vl > 0) ? list_ind : 0);
+
+                    /* en presentación: centrar la fila visual dentro de su
+                       ancho útil (el código mantiene su alineación) */
+                    if (r->center_slide &&
+                        line->type != LINE_CODE_BLOCK &&
+                        line->type != LINE_HIGHLIGHT) {
+                        int row_w = 0;
+                        for (int k = start; k < end; k++) {
+                            int cw = wcwidth(chars[k]);
+                            row_w += (cw < 0) ? 1 : cw;
+                        }
+                        int eff_w = avail_w - ((vl > 0) ? list_ind : 0);
+                        sx += (eff_w - row_w) / 2;
+                    }
                     int ci = start;
                     while (ci < end) {
                         /* agrupar chars consecutivos con mismo atributo */
@@ -1100,6 +1115,27 @@ static int render_source_line(Renderer *r, int line_idx,
     int wrap_row = 0;
     int used     = 0;
     wchar_t wbuf[16384];
+
+    /* en presentación: centrar la línea si cabe en una sola fila
+       (las que se parten en varias mantienen la alineación izquierda) */
+    int char_center = 0;
+    if (r->center_slide &&
+        line->type != LINE_CODE_BLOCK && line->type != LINE_HIGHLIGHT) {
+        wchar_t *fchars = NULL;
+        chtype  *fattrs = NULL;
+        int ftotal = flatten_spans(line, &fchars, &fattrs);
+        if (ftotal > 0) {
+            int tw = 0;
+            for (int k = 0; k < ftotal; k++) {
+                int cw = wcwidth(fchars[k]);
+                tw += (cw < 0) ? 1 : cw;
+            }
+            if (tw <= avail_w)
+                char_center = (avail_w - tw) / 2;
+        }
+        free(fchars);
+        free(fattrs);
+    }
 
     /* número de línea en la primera fila */
     if (skip_rows <= 0)
@@ -1149,7 +1185,7 @@ static int render_source_line(Renderer *r, int line_idx,
             int row = screen_y + wrap_row - skip_rows;
             if (wrap_row >= skip_rows &&
                 row >= 0 && row < r->content_h && seg_chars > 0) {
-                wmove(r->main_win, row, margin + col);
+                wmove(r->main_win, row, margin + char_center + col);
                 wattron(r->main_win, attr);
                 waddnwstr(r->main_win, wbuf + wi, seg_chars);
                 wattroff(r->main_win, attr);
@@ -1331,6 +1367,7 @@ Renderer *renderer_create(Document *doc, const char *filename,
     r->flash_copy   = 0;
     r->mouse_valid  = 0;
     r->mouse_enabled = 0;
+    r->center_slide = 0;
 
     /* iniciar ncurses */
     initscr();
@@ -2509,7 +2546,8 @@ static void presentation_draw_status(Renderer *r, int idx, int count,
     wbkgd(r->status_win, COLOR_PAIR(CP_STATUSBAR));
 
     char buf[128];
-    snprintf(buf, sizeof(buf), "Diapositiva %d/%d%s  [←/→] [q] salir",
+    snprintf(buf, sizeof(buf),
+             "Diapositiva %d/%d%s  [c]entrar [←/→] [q] salir",
              idx + 1, count, truncated ? " ▼" : "");
 
     /* centrar por columnas visuales (▼/←/→ ocupan 1 columna pero 3 bytes) */
@@ -2568,12 +2606,14 @@ static void presentation_show(Renderer *r) {
     }
     int cur = 0;
 
-    /* la presentación usa siempre la vista renderizada y sin números
-       de línea; se restauran al salir */
+    /* la presentación usa siempre la vista renderizada, sin números de
+       línea y con centrado horizontal; todo se restaura al salir */
     int saved_numbers = r->show_numbers;
     int saved_raw     = r->show_raw;
+    int saved_center  = r->center_slide;
     r->show_numbers = 0;
     r->show_raw     = 0;
+    r->center_slide = 1;
 
     int done = 0;
     while (!done) {
@@ -2597,6 +2637,11 @@ static void presentation_show(Renderer *r) {
         case 'h':
         case 'H':
             if (cur > 0) cur--;
+            break;
+
+        case 'c':
+        case 'C':
+            r->center_slide = !r->center_slide;
             break;
 
         case 'g':
@@ -2643,6 +2688,7 @@ static void presentation_show(Renderer *r) {
 
     r->show_numbers = saved_numbers;
     r->show_raw     = saved_raw;
+    r->center_slide = saved_center;
     free(slides);
     renderer_draw(r);
 }
