@@ -600,7 +600,7 @@ static int table_center_offset(Renderer *r, const int *adj_w, int ncols,
  * retorna cuántas filas de pantalla se usaron
  * ────────────────────────────────────────────── */
 static int render_source_line(Renderer *r, int line_idx,
-                               int screen_y, int skip_rows) {
+                               int screen_y, int skip_rows, int code_off) {
     if (screen_y >= r->content_h) return 0;
 
     ParsedLine *line = &r->doc->lines[line_idx];
@@ -1082,6 +1082,10 @@ static int render_source_line(Renderer *r, int line_idx,
                         int eff_w = avail_w - ((vl > 0) ? list_ind : 0);
                         sx += (eff_w - row_w) / 2;
                     }
+
+                    /* bloques de código: offset uniforme calculado por el
+                       llamador (centra el bloque sin romper su indentación) */
+                    sx += code_off;
                     int ci = start;
                     while (ci < end) {
                         /* agrupar chars consecutivos con mismo atributo */
@@ -1196,7 +1200,7 @@ static int render_source_line(Renderer *r, int line_idx,
             int row = screen_y + wrap_row - skip_rows;
             if (wrap_row >= skip_rows &&
                 row >= 0 && row < r->content_h && seg_chars > 0) {
-                wmove(r->main_win, row, margin + char_center + col);
+                wmove(r->main_win, row, margin + char_center + code_off + col);
                 wattron(r->main_win, attr);
                 waddnwstr(r->main_win, wbuf + wi, seg_chars);
                 wattroff(r->main_win, attr);
@@ -1509,7 +1513,7 @@ void renderer_draw(Renderer *r) {
     } else {
         /* ── modo renderizado ── */
         for (int i = sl; i < r->doc->count && sy < r->content_h; i++) {
-            int used = render_source_line(r, i, sy, skip);
+            int used = render_source_line(r, i, sy, skip, 0);
             sy  += used;
             skip = 0;  /* solo la primera línea tiene skip */
         }
@@ -2591,9 +2595,48 @@ static void presentation_draw_slide(Renderer *r, const SlideRange *slides,
     int truncated = h > r->content_h;
     int sy = h < r->content_h ? (r->content_h - h) / 2 : 0;
 
+    /* offsets de centrado de los bloques de código de la diapositiva:
+       cada bloque se centra como un todo según el ancho máximo de sus
+       líneas (un solo offset preserva la indentación interna) */
+    int range_n = s->last_line - s->first_line + 1;
+    int *code_offs = range_n > 0 ? calloc((size_t)range_n, sizeof(int))
+                                 : NULL;
+    if (code_offs) {
+        for (int i = s->first_line; i <= s->last_line && i < r->doc->count; ) {
+            LineType t = r->doc->lines[i].type;
+            if (t != LINE_CODE_BLOCK && t != LINE_HIGHLIGHT) { i++; continue; }
+
+            int j = i, max_w = 0;
+            while (j <= s->last_line && j < r->doc->count &&
+                   (r->doc->lines[j].type == LINE_CODE_BLOCK ||
+                    r->doc->lines[j].type == LINE_HIGHLIGHT)) {
+                wchar_t *fchars = NULL;
+                chtype  *fattrs = NULL;
+                int ft = flatten_spans(&r->doc->lines[j], &fchars, &fattrs);
+                if (ft > 0) {
+                    int w = 0;
+                    for (int k = 0; k < ft; k++) {
+                        int cw = wcwidth(fchars[k]);
+                        w += (cw < 0) ? 1 : cw;
+                    }
+                    if (w > max_w) max_w = w;
+                }
+                free(fchars);
+                free(fattrs);
+                j++;
+            }
+            int off = max_w < avail ? (avail - max_w) / 2 : 0;
+            for (int k = i; k < j; k++)
+                code_offs[k - s->first_line] = off;
+            i = j;
+        }
+    }
+
     werase(r->main_win);
     for (int i = s->first_line; i <= s->last_line && sy < r->content_h; i++)
-        sy += render_source_line(r, i, sy, 0);
+        sy += render_source_line(r, i, sy, 0,
+                                 code_offs ? code_offs[i - s->first_line] : 0);
+    free(code_offs);
 
     /* limpiar filas sobrantes */
     for (; sy < r->content_h; sy++) {
