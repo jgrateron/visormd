@@ -1293,7 +1293,7 @@ static void draw_status(Renderer *r) {
        aunque el resto de la barra se trunque por el ancho del terminal */
     mvwprintw(r->status_win, 0, 0,
               " visormd  %s%s  L%d/%d  %d%%  %s  [q]uit [r]eload [arrows/jk] "
-              "[PgUp/PgDn] [g/G] [n]ums [w]rap [F1]acerca [F2]tema",
+              "[PgUp/PgDn] [g/G] [n]ums [w]rap [p]res. [F1]acerca [F2]tema",
               show,
               r->flash_copy ? "  ✔ copiado" : "",
               r->scroll_line + 1, line_count,
@@ -1485,6 +1485,7 @@ void renderer_draw(Renderer *r) {
 
 static void theme_selector_show(Renderer *r);
 static void about_show(Renderer *r);
+static void presentation_show(Renderer *r);
 
 static int avail_width(Renderer *r) {
     int m = r->show_numbers ? 6 : 2;
@@ -1983,6 +1984,11 @@ int renderer_handle_input(Renderer *r, int ch) {
         r->wrap_words = !r->wrap_words;
         break;
 
+    case 'p':
+    case 'P':
+        presentation_show(r);
+        break;
+
     case 'r':
     case 'R':
         renderer_reload(r);
@@ -2394,6 +2400,250 @@ static void about_show(Renderer *r) {
 
     delwin(overlay);
     curs_set(0);
+    renderer_draw(r);
+}
+
+/* ──────────────────────────────────────────────
+ * modo presentación: diapositivas a pantalla completa
+ * ────────────────────────────────────────────── */
+
+typedef struct {
+    int first_line;   /* primera línea visible de la diapositiva (inclusive) */
+    int last_line;    /* última línea visible (inclusive); -1 = vacía */
+} SlideRange;
+
+/* ── añadir una diapositiva al índice; devuelve 0 si no hay memoria ── */
+static int slide_append(SlideRange **slides, int *n, int *cap,
+                        int first, int last) {
+    if (*n == *cap) {
+        int nc = *cap ? *cap * 2 : 8;
+        SlideRange *tmp = realloc(*slides, sizeof(SlideRange) * (size_t)nc);
+        if (!tmp) return 0;
+        *slides = tmp;
+        *cap    = nc;
+    }
+    (*slides)[*n].first_line = first;
+    (*slides)[*n].last_line  = last;
+    (*n)++;
+    return 1;
+}
+
+/* ── construir el índice de diapositivas: se parte en cada H1 (que queda
+   como título visible de su diapositiva) y en cada regla horizontal
+   (consumida como separador, no se dibuja). Las líneas vacías de los
+   extremos se recortan y las diapositivas vacías se omiten. ── */
+static SlideRange *presentation_build_slides(Renderer *r, int *out_count) {
+    SlideRange *slides = NULL;
+    int n = 0, cap = 0;
+    int cur_first      = -1;  /* primera línea no vacía de la diapositiva en curso */
+    int last_non_empty = -1;  /* última línea no vacía vista */
+
+    for (int i = 0; i < r->doc->count; i++) {
+        LineType t = r->doc->lines[i].type;
+
+        if (t == LINE_HEADING_1 || t == LINE_HORIZONTAL_RULE) {
+            /* el borde cierra la diapositiva en curso */
+            if (cur_first >= 0 &&
+                !slide_append(&slides, &n, &cap, cur_first, last_non_empty)) {
+                free(slides);
+                n = 0;
+                goto fallback;
+            }
+            if (t == LINE_HEADING_1) {
+                /* el H1 abre la siguiente diapositiva: es su título */
+                cur_first      = i;
+                last_non_empty = i;
+            } else {
+                /* la regla horizontal se consume como separador */
+                cur_first      = -1;
+                last_non_empty = -1;
+            }
+        } else if (t != LINE_EMPTY) {
+            if (cur_first < 0) cur_first = i;
+            last_non_empty = i;
+        }
+    }
+    if (cur_first >= 0 &&
+        !slide_append(&slides, &n, &cap, cur_first, last_non_empty)) {
+        free(slides);
+        n = 0;
+        goto fallback;
+    }
+
+    if (n > 0) {
+        *out_count = n;
+        return slides;
+    }
+
+fallback:
+    /* sin diapositivas (doc vacío, solo líneas vacías o solo separadores):
+       una única diapositiva con todo el documento */
+    free(slides);
+    int f = -1, l = -1;
+    for (int i = 0; i < r->doc->count; i++) {
+        LineType t = r->doc->lines[i].type;
+        if (t != LINE_EMPTY && t != LINE_HORIZONTAL_RULE) {
+            if (f < 0) f = i;
+            l = i;
+        }
+    }
+    if (f < 0) {
+        f = 0;
+        l = r->doc->count > 0 ? r->doc->count - 1 : -1;
+    }
+    slides = malloc(sizeof(SlideRange));
+    if (!slides) {
+        *out_count = 0;
+        return NULL;
+    }
+    slides[0].first_line = f;
+    slides[0].last_line  = l;
+    *out_count = 1;
+    return slides;
+}
+
+/* ── barra de estado del modo presentación: contador centrado ── */
+static void presentation_draw_status(Renderer *r, int idx, int count,
+                                     int truncated) {
+    werase(r->status_win);
+    wbkgd(r->status_win, COLOR_PAIR(CP_STATUSBAR));
+
+    char buf[128];
+    snprintf(buf, sizeof(buf), "Diapositiva %d/%d%s  [←/→] [q] salir",
+             idx + 1, count, truncated ? " ▼" : "");
+
+    /* centrar por columnas visuales (▼/←/→ ocupan 1 columna pero 3 bytes) */
+    wchar_t wbuf[128];
+    int wlen = utf8_to_wide(buf, (int)strlen(buf), wbuf, 128);
+    int w    = 0;
+    for (int i = 0; i < wlen; i++) {
+        int cw = wcwidth(wbuf[i]);
+        if (cw > 0) w += cw;
+    }
+    int x = (r->term_w - w) / 2;
+    if (x < 0) x = 0;
+
+    mvwprintw(r->status_win, 0, x, "%s", buf);
+    wrefresh(r->status_win);
+}
+
+/* ── dibujar la diapositiva idx (0-based) en el área de contenido ── */
+static void presentation_draw_slide(Renderer *r, const SlideRange *slides,
+                                    int count, int idx) {
+    const SlideRange *s = &slides[idx];
+    int avail = avail_width(r);
+
+    /* altura total de la diapositiva con el ancho actual */
+    int h = 0;
+    for (int i = s->first_line; i <= s->last_line && i < r->doc->count; i++)
+        h += line_wrapped_rows(&r->doc->lines[i], avail, r->wrap_words);
+
+    /* centrado vertical si cabe; si no, se trunca por abajo */
+    int truncated = h > r->content_h;
+    int sy = h < r->content_h ? (r->content_h - h) / 2 : 0;
+
+    werase(r->main_win);
+    for (int i = s->first_line; i <= s->last_line && sy < r->content_h; i++)
+        sy += render_source_line(r, i, sy, 0);
+
+    /* limpiar filas sobrantes */
+    for (; sy < r->content_h; sy++) {
+        wmove(r->main_win, sy, 0);
+        wclrtoeol(r->main_win);
+    }
+
+    presentation_draw_status(r, idx, count, truncated);
+    wrefresh(r->main_win);
+}
+
+/* ──────────────────────────────────────────────
+ * bucle principal del modo presentación
+ * ────────────────────────────────────────────── */
+static void presentation_show(Renderer *r) {
+    int count = 0;
+    SlideRange *slides = presentation_build_slides(r, &count);
+    if (!slides || count <= 0) {
+        free(slides);
+        return;
+    }
+    int cur = 0;
+
+    /* la presentación usa siempre la vista renderizada y sin números
+       de línea; se restauran al salir */
+    int saved_numbers = r->show_numbers;
+    int saved_raw     = r->show_raw;
+    r->show_numbers = 0;
+    r->show_raw     = 0;
+
+    int done = 0;
+    while (!done) {
+        presentation_draw_slide(r, slides, count, cur);
+
+        int ch = renderer_getch(r);
+        switch (ch) {
+        case ' ':
+        case KEY_RIGHT:
+        case KEY_NPAGE:
+        case 'l':
+        case 'L':
+            if (cur < count - 1) cur++;
+            break;
+
+        case KEY_BACKSPACE:
+        case 127:
+        case 8:
+        case KEY_LEFT:
+        case KEY_PPAGE:
+        case 'h':
+        case 'H':
+            if (cur > 0) cur--;
+            break;
+
+        case 'g':
+        case KEY_HOME:
+            cur = 0;
+            break;
+
+        case 'G':
+        case KEY_END:
+            cur = count - 1;
+            break;
+
+        case 'q':
+        case 'Q':
+        case 'p':
+        case 'P':
+        case 27:  /* Esc */
+            done = 1;
+            break;
+
+        case KEY_RESIZE:
+            renderer_resize(r);
+            break;
+
+        case KEY_MOUSE:
+            {
+                MEVENT event = r->last_mouse;
+                r->mouse_valid = 0;
+                if (event.bstate & (BUTTON4_PRESSED | BUTTON3_PRESSED)) {
+                    /* rueda arriba / click derecho: anterior */
+                    if (cur > 0) cur--;
+                } else if (event.bstate & (BUTTON5_PRESSED | BUTTON1_PRESSED)) {
+                    /* rueda abajo / click izquierdo: siguiente */
+                    if (cur < count - 1) cur++;
+                }
+                /* el resto (arrastres, sueltas, movimiento) se ignora */
+            }
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    r->show_numbers = saved_numbers;
+    r->show_raw     = saved_raw;
+    free(slides);
     renderer_draw(r);
 }
 

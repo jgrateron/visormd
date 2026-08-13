@@ -140,6 +140,21 @@ When stdin is a pipe and interactive mode is used, the program reopens `/dev/tty
 | `F1` | About VisorMD (3D rotating logo) |
 | `F2` | Open theme selector |
 | `F4` | Toggle rendered view / raw Markdown source |
+| `p` | Toggle presentation mode (slides split on `#` headings and `---` rules) |
+
+### Presentation mode
+
+Press `p` to enter presentation mode. The document is split into full-screen slides on `#` level-1 headings and `---` horizontal rules: the rule is consumed as a separator (not drawn) and the heading becomes the slide title. Empty slides are skipped, short slides are vertically centered, and slides taller than the screen are truncated (a ▼ marker appears in the status bar). Line numbers are temporarily hidden and restored on exit.
+
+| Key | Action |
+|-----|--------|
+| Space / `→` / PgDn / `l` | Next slide |
+| Backspace / `←` / PgUp / `h` | Previous slide |
+| `g` / Home | First slide |
+| `G` / End | Last slide |
+| `p` / `q` / Esc | Exit presentation mode |
+
+The mouse also works while in presentation mode: wheel up / right click goes to the previous slide, wheel down / left click to the next one.
 
 ### Mouse
 
