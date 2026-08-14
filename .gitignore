@@ -9,3 +9,20 @@ obj/
 *~
 *.swp
 *.swo
+
+# Configuración personal de la máquina de desarrollo (no es parte del proyecto)
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.profile
+.ripgreprc
+.zprofile
+.zshrc
+
+# IDEs
+.idea
+.vscode
+
+# Configuración de MCP (puede contener credenciales personales)
+.mcp.json
