@@ -309,6 +309,35 @@ static const char *vb_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * Go
+ * ────────────────────────────────────────────── */
+static const char *go_keywords[] = {
+    "break", "case", "chan", "const", "continue",
+    "default", "defer", "else", "fallthrough", "for",
+    "func", "go", "goto", "if", "import",
+    "interface", "map", "package", "range", "return",
+    "select", "struct", "switch", "type", "var",
+    NULL
+};
+
+static const char *go_types[] = {
+    /* tipos predeclarados */
+    "any", "bool", "byte", "comparable", "complex64",
+    "complex128", "error", "float32", "float64",
+    "int", "int8", "int16", "int32", "int64",
+    "rune", "string", "uint", "uint8", "uint16",
+    "uint32", "uint64", "uintptr",
+    /* literales y constantes predeclaradas */
+    "true", "false", "nil", "iota",
+    /* funciones builtin */
+    "append", "cap", "clear", "close", "complex",
+    "copy", "delete", "imag", "len", "make",
+    "max", "min", "new", "panic", "print",
+    "println", "real", "recover",
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * Python
  * ────────────────────────────────────────────── */
 static const char *py_keywords[] = {
@@ -505,6 +534,8 @@ static const LangDef languages[] = {
     { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0 },
     { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0 },
     { "json",       json_keywords, json_types,      0, 0, 0, 0, 0 },
+    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0 },
+    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0 },
     { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0 },
     { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0 },
     { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0 },
@@ -960,14 +991,17 @@ int highlight_line(ParsedLine *line, const char *text,
             continue;
         }
 
-        /* ── template literal JS/TS y backtick identifiers MySQL ── */
+        /* ── template literal JS/TS, raw string Go y
+           backtick identifiers MySQL ── */
         if (text[i] == '`' &&
             (strcmp(ld->name, "javascript") == 0 ||
              strcmp(ld->name, "js") == 0 ||
              strcmp(ld->name, "ts") == 0 ||
              strcmp(ld->name, "typescript") == 0 ||
              strcmp(ld->name, "mysql") == 0 ||
-             strcmp(ld->name, "mariadb") == 0)) {
+             strcmp(ld->name, "mariadb") == 0 ||
+             strcmp(ld->name, "go") == 0 ||
+             strcmp(ld->name, "golang") == 0)) {
             cb_flush(&buf, line, SPAN_KW_NORMAL);
             int start = i;
             i++;
@@ -1035,6 +1069,11 @@ int highlight_line(ParsedLine *line, const char *text,
 
             /* sufijo Python: j J (números complejos) */
             if (i < len && (text[i] == 'j' || text[i] == 'J')) i++;
+
+            /* sufijo Go: i (literales imaginarios, p. ej. 1i) */
+            if (i < len && text[i] == 'i' &&
+                (strcmp(ld->name, "go") == 0 ||
+                 strcmp(ld->name, "golang") == 0)) i++;
 
             char *num = strndup(text + start, (size_t)(i - start));
             emit_span(line, num, SPAN_KW_NUMBER);
