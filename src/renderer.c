@@ -2597,10 +2597,13 @@ static void presentation_draw_slide(Renderer *r, const SlideRange *slides,
 
     /* offsets de centrado de los bloques de código de la diapositiva:
        cada bloque se centra como un todo según el ancho máximo de sus
-       líneas (un solo offset preserva la indentación interna) */
+       líneas (un solo offset preserva la indentación interna).
+       Solo cuando el centrado horizontal está activo: si se desactiva
+       con [c], los bloques vuelven a la alineación izquierda */
     int range_n = s->last_line - s->first_line + 1;
-    int *code_offs = range_n > 0 ? calloc((size_t)range_n, sizeof(int))
-                                 : NULL;
+    int *code_offs = NULL;
+    if (r->center_slide && range_n > 0)
+        code_offs = calloc((size_t)range_n, sizeof(int));
     if (code_offs) {
         for (int i = s->first_line; i <= s->last_line && i < r->doc->count; ) {
             LineType t = r->doc->lines[i].type;
