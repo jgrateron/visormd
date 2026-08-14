@@ -2664,13 +2664,14 @@ static void presentation_show(Renderer *r) {
     int cur = 0;
 
     /* la presentación usa siempre la vista renderizada, sin números de
-       línea y con centrado horizontal; todo se restaura al salir */
+       línea; el centrado horizontal empieza desactivado ([c] lo alterna);
+       todo se restaura al salir */
     int saved_numbers = r->show_numbers;
     int saved_raw     = r->show_raw;
     int saved_center  = r->center_slide;
     r->show_numbers = 0;
     r->show_raw     = 0;
-    r->center_slide = 1;
+    r->center_slide = 0;
 
     int done = 0;
     while (!done) {
