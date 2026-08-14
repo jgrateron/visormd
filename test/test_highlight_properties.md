@@ -1,0 +1,39 @@
+# Properties Highlight Test
+
+Comments (`#` and `!`), keys, separators (`=` and `:`), values, and INI-style sections.
+
+```properties
+# application.properties
+application.name=DeveloperAPI
+application.version=1.0
+application.author=Gopi
+
+# comment variants
+! bang-style comment
+   # indented comment
+server.port=8080
+server.host=localhost
+
+# keys with different separators and spacing
+database.url=jdbc:mysql://localhost:3306/app
+database.username=admin
+database.password=secret
+database.options: useSSL=false
+max.connections = 100
+
+# values that look like other types
+app.title=Developer API
+app.description=API para desarrolladores
+app.default-theme=dark
+file.size.limit=10485760
+app.flag.enabled=true
+
+# INI-style sections
+[server]
+address=127.0.0.1
+port=8080
+
+[logging]
+level=INFO
+path=/var/log/app
+```
