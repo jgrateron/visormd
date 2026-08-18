@@ -30,7 +30,7 @@ Test Markdown inputs (`test/*.md`) and their expected plain-text outputs (`test/
 To regenerate expected outputs after a rendering change:
 
 ```bash
-for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md test/test_blockquote.md test/test_highlight_c.md test/test_highlight_cpp.md test/test_highlight_java.md test/test_highlight_js.md test/test_highlight_cs.md test/test_highlight_vb.md test/test_highlight_json.md test/test_highlight_python.md test/test_highlight_xml.md test/test_highlight_sql.md test/test_highlight_kotlin.md test/test_highlight_gherkin.md test/test_highlight_go.md test/test_highlight_properties.md; do
+for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md test/test_blockquote.md test/test_highlight_c.md test/test_highlight_cpp.md test/test_highlight_java.md test/test_highlight_js.md test/test_highlight_cs.md test/test_highlight_vb.md test/test_highlight_json.md test/test_highlight_python.md test/test_highlight_xml.md test/test_highlight_sql.md test/test_highlight_kotlin.md test/test_highlight_gherkin.md test/test_highlight_go.md test/test_highlight_properties.md test/test_highlight_yaml.md; do
     base="${f%.md}"
     TERM=xterm-256color LANG=C.UTF-8 ./visormd --cat "$f" > "${base}_expected.txt"
 done
@@ -62,6 +62,7 @@ done
 | `test_highlight_gherkin.md` | Gherkin: `Feature`/`Scenario`/`Background`/`Rule`, pasos `Given`/`When`/`Then`/`And`/`But`/`*`, `@tags`, placeholders `<var>`, tablas de `Examples`, docstrings `"""` multilínea, comentarios `#`, keywords en español |
 | `test_highlight_go.md` | Go: keywords (`func`, `go`, `chan`, `defer`, `select`, `range`...), tipos predeclarados (`int`, `string`, `float64`, `rune`, `any`, `error`...), builtins (`make`, `len`, `append`, `panic`...), strings con escapes, raw strings `` `...` ``, runes `'A'`, números (hex `0xFF`, bin `0b1010`, oct `0o755`, separadores `1_000_000`, exponente `3.5e-2`, imaginario `1i`), comentarios `//` y `/* */` |
 | `test_highlight_properties.md` | Properties/INI: comentarios `#` y `!` al inicio de línea, claves con puntos/guiones (`application.name`), separadores `=` y `:` (con y sin espacios alrededor), valores con URLs/puntos/números, secciones `[nombre]` estilo INI |
+| `test_highlight_yaml.md` | YAML: claves (`clave: valor` y anidadas), comentarios `#` (con y sin espacio previo, dentro de strings), strings con `'` y `"` (incluido `''` escapado), números (hex/oct/bin, `1_000_000`, `1.5e3`, `.inf`/`.nan`), fechas `2024-01-15` y `2024-01-15T10:30:00`, literales (`true`/`false`/`null`/`yes`/`no`/`on`/`off`/`~`), anclas `&x`, alias `*x`, tags `!!str`/`!custom`/`!<...>`, marcadores `---`/`...`, escalares en bloque `|` `|-` `>` con líneas en blanco, listas `- ` anidadas, URLs y `clave:valor` sin espacio (no resaltados como clave) |
 
 ## Architecture
 
@@ -105,7 +106,7 @@ The default mode is interactive (ncurses), even when reading from a pipe/redirec
    - Theme selector overlay (triggered by F2) is implemented as a static function in `renderer.c` since it needs intimate access to ncurses windows.
 
 6. **`src/highlight.c`** — Syntax highlighting for fenced code blocks:
-   - Maps language identifiers (`c`, `cpp`, `java`, `javascript`, `js`, `ts`, `python`, `py`, `go`, `cs`, `vb`, `json`, `xml`, `html`, `svg`, etc.) to keyword/type lists and tokenizer rules.
+   - Maps language identifiers (`c`, `cpp`, `java`, `javascript`, `js`, `ts`, `python`, `py`, `go`, `cs`, `vb`, `json`, `xml`, `html`, `svg`, `yaml`, `yml`, etc.) to keyword/type lists and tokenizer rules. Languages with line-oriented syntax (XML, Properties/INI, YAML) use specialized per-line tokenizers instead of the generic keyword tokenizer.
    - Tokenizes per-line with a `HighlightState` that tracks multi-line comment (`/* */`) across lines.
    - Produces `SPAN_KW_*` spans: `KEYWORD`, `TYPE`, `STRING`, `COMMENT`, `NUMBER`, `PREPROC`.
    - For Bash (`bash`, `sh`, `zsh`), highlighting is still handled inline in `parser.c` (`parse_bash_line`) with the legacy `SPAN_BASH_*` spans.

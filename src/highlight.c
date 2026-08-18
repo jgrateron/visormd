@@ -18,6 +18,7 @@ typedef struct {
     int          has_dash_comment; /* -- es comentario de línea (SQL) */
     int          is_gherkin;      /* Gherkin: @tags, <placeholders>, * pasos */
     int          is_properties;   /* Properties/INI: clave=valor, # y ! comentarios */
+    int          is_yaml;         /* YAML: clave: valor, comentarios, anclas... */
 } LangDef;
 
 /* ──────────────────────────────────────────────
@@ -404,6 +405,20 @@ static const char *properties_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * YAML: las claves, comentarios, anclas, tags y escalares
+ * en bloque se resaltan con un tokenizador especializado;
+ * aquí solo se listan los literales escalares
+ * ────────────────────────────────────────────── */
+static const char *yaml_keywords[] = {
+    "true", "false", "null", "yes", "no", "on", "off",
+    NULL
+};
+
+static const char *yaml_types[] = {
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * XML / HTML (markup simple: tags, comentarios, entidades)
  * ────────────────────────────────────────────── */
 static const char *xml_keywords[] = {
@@ -528,58 +543,60 @@ static const char *gherkin_types[] = {
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
-    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0},
-    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0},
-    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0},
-    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0},
-    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0},
-    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0},
-    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0},
-    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0},
-    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0},
-    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0},
-    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0},
-    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0},
-    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0},
-    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0},
-    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0},
-    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0},
-    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0},
-    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0},
-    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0},
-    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0},
-    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0},
-    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0},
-    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1},
-    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1},
-    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1},
-    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0},
-    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0},
-    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0},
-    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0},
-    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0},
-    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0},
-    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0},
-    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0},
-    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0},
-    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0},
-    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0},
-    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0},
-    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0},
-    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0},
-    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0},
-    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0},
-    { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0 }
+    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0},
+    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0},
+    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0},
+    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0},
+    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0},
+    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0},
+    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0},
+    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0},
+    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0},
+    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0},
+    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0},
+    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0},
+    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0},
+    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0},
+    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0},
+    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0},
+    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0},
+    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0},
+    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0},
+    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0},
+    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0},
+    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0},
+    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0},
+    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0},
+    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0},
+    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1},
+    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1},
+    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0},
+    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0},
+    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
+    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
+    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
+    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
+    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
+    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
+    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0},
+    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0},
+    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
+    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0},
+    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0},
+    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0},
+    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0},
+    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0},
+    { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 /* ──────────────────────────────────────────────
@@ -591,6 +608,20 @@ static int str_in_array(const char *word, const char **array) {
         if (strcmp(word, array[i]) == 0) return 1;
     }
     return 0;
+}
+
+/* ──────────────────────────────────────────────
+ * helper: comparar word con s, sin distinguir mayúsculas
+ * (para .inf/.nan de YAML)
+ * ────────────────────────────────────────────── */
+static int ci_word_match(const char *s, const char *w) {
+    while (*w) {
+        if (tolower((unsigned char)*s) != tolower((unsigned char)*w))
+            return 0;
+        s++;
+        w++;
+    }
+    return 1;
 }
 
 /* ──────────────────────────────────────────────
@@ -688,6 +719,8 @@ void highlight_state_init(HighlightState *st) {
     st->in_block_comment = 0;
     st->in_triple_quote = 0;
     st->in_xml_comment   = 0;
+    st->in_yaml_block    = 0;
+    st->yaml_block_indent = 0;
 }
 
 int highlight_supported(const char *lang) {
@@ -875,6 +908,360 @@ static int highlight_properties_line(ParsedLine *line, const char *text,
     return 0;
 }
 
+/* ══════════════════════════════════════════════════════════════
+ * tokenizador YAML: claves (clave: valor), comentarios #,
+ * strings, números (incluye fechas 2024-01-15), literales
+ * (true/false/null/yes/no/on/off/~), anclas &x, alias *x,
+ * tags !t, marcadores --- / ... y escalares en bloque | y >
+ * ══════════════════════════════════════════════════════════════ */
+static int highlight_yaml_line(ParsedLine *line, const char *text,
+                               HighlightState *st) {
+    int len = (int)strlen(text);
+    int i   = 0;
+    CBuf buf;
+    cb_init(&buf);
+
+    /* indentación de la línea (para los escalares en bloque) */
+    int indent = 0;
+    while (indent < len && (text[indent] == ' ' || text[indent] == '\t'))
+        indent++;
+
+    /* ── dentro de un escalar en bloque (| o >) ── */
+    if (st->in_yaml_block) {
+        if (indent == len) {
+            /* línea en blanco: no cierra el bloque */
+            emit_span(line, text, SPAN_KW_STRING);
+            return 0;
+        }
+        if (indent > st->yaml_block_indent) {
+            /* contenido del bloque: todo es string */
+            emit_span(line, text, SPAN_KW_STRING);
+            return 0;
+        }
+        /* la indentación ya no continúa el bloque: cerrar */
+        st->in_yaml_block = 0;
+    }
+
+    int at_line_start = 1;  /* solo se han consumido espacios */
+
+    while (i < len) {
+        /* ── espacios y tabs → texto normal ── */
+        if (text[i] == ' ' || text[i] == '\t') {
+            cb_put(&buf, text[i++]);
+            continue;
+        }
+
+        /* ── marcador de documento: --- o ... al inicio ── */
+        if (at_line_start &&
+            text[i] == '-' && text[i + 1] == '-' && text[i + 2] == '-' &&
+            (i + 3 >= len || text[i + 3] == ' ' || text[i + 3] == '\t')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, "---", SPAN_KW_KEYWORD);
+            i += 3;
+            at_line_start = 0;
+            continue;
+        }
+        if (at_line_start &&
+            text[i] == '.' && text[i + 1] == '.' && text[i + 2] == '.' &&
+            (i + 3 >= len || text[i + 3] == ' ' || text[i + 3] == '\t')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, "...", SPAN_KW_KEYWORD);
+            i += 3;
+            at_line_start = 0;
+            continue;
+        }
+
+        /* ── ítem de lista: "- " o "-clave" al inicio de línea ── */
+        if (at_line_start && text[i] == '-') {
+            char nx = text[i + 1];
+            if (nx == ' ' || nx == '\t' || nx == '\0' ||
+                isalpha((unsigned char)nx) || nx == '_' ||
+                nx == '"' || nx == '\'') {
+                cb_flush(&buf, line, SPAN_KW_NORMAL);
+                emit_span(line, "-", SPAN_KW_KEYWORD);
+                i++;
+                at_line_start = 0;
+                continue;
+            }
+        }
+
+        /* ── número: entero, negativo, 0x/0o/0b, float,
+               .inf/.nan y fechas 2024-01-15 ── */
+        if (isdigit((unsigned char)text[i]) ||
+            (text[i] == '-' && isdigit((unsigned char)text[i + 1])) ||
+            (text[i] == '.' &&
+             ((isdigit((unsigned char)text[i + 1])) ||
+              ci_word_match(text + i + 1, "inf") ||
+              ci_word_match(text + i + 1, "nan")))) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+
+            /* .inf / .nan */
+            if (text[i] == '.' && !isdigit((unsigned char)text[i + 1])) {
+                i += 4;
+                goto yaml_num_emit;
+            }
+
+            if (text[i] == '-') i++;  /* signo negativo */
+
+            /* prefijo de base: 0x, 0o, 0b */
+            if (text[i] == '0' && i + 1 < len) {
+                char nx = (char)tolower((unsigned char)text[i + 1]);
+                if (nx == 'x' || nx == 'o' || nx == 'b') {
+                    i += 2;
+                    while (i < len &&
+                           ((nx == 'x' && is_hex_digit(text[i])) ||
+                            (nx == 'o' && is_octal_digit(text[i])) ||
+                            (nx == 'b' && is_bin_digit(text[i])) ||
+                            text[i] == '_'))
+                        i++;
+                    goto yaml_num_emit;
+                }
+            }
+
+            /* parte entera */
+            int digits = 0;
+            while (i < len && (isdigit((unsigned char)text[i]) ||
+                               text[i] == '_')) {
+                if (text[i] != '_') digits++;
+                i++;
+            }
+
+            /* parte fraccionaria */
+            if (i < len && text[i] == '.') {
+                i++;
+                while (i < len && (isdigit((unsigned char)text[i]) ||
+                                   text[i] == '_')) i++;
+            }
+
+            /* exponente */
+            if (i < len && (text[i] == 'e' || text[i] == 'E')) {
+                i++;
+                if (i < len && (text[i] == '+' || text[i] == '-')) i++;
+                while (i < len && (isdigit((unsigned char)text[i]) ||
+                                   text[i] == '_')) i++;
+            }
+
+            /* fecha/hora YAML: 2024-01-15 o 2024-01-15T10:30:00 */
+            if (digits == 4 && i - start == 4 &&
+                i < len && text[i] == '-' &&
+                isdigit((unsigned char)text[i + 1]) &&
+                isdigit((unsigned char)text[i + 2])) {
+                i += 3;  /* -dd */
+                if (i < len && text[i] == '-' &&
+                    isdigit((unsigned char)text[i + 1]) &&
+                    isdigit((unsigned char)text[i + 2])) {
+                    i += 3;  /* -dd */
+                    /* parte horaria: T o espacio + hh:mm[:ss(.frac)] */
+                    if ((text[i] == 'T' || text[i] == 't' ||
+                         text[i] == ' ') &&
+                        isdigit((unsigned char)text[i + 1]) &&
+                        isdigit((unsigned char)text[i + 2]) &&
+                        text[i + 3] == ':') {
+                        i += 4;  /* hh: */
+                        while (i < len &&
+                               (isdigit((unsigned char)text[i]) ||
+                                text[i] == ':' || text[i] == '.'))
+                            i++;
+                        if (i < len &&
+                            (text[i] == 'Z' || text[i] == 'z')) i++;
+                    }
+                }
+            }
+
+        yaml_num_emit:
+            char *num = strndup(text + start, (size_t)(i - start));
+            emit_span(line, num, SPAN_KW_NUMBER);
+            free(num);
+            at_line_start = 0;
+            continue;
+        }
+
+        /* ── string con comillas dobles: "..." ── */
+        if (text[i] == '"') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i++;
+            while (i < len && text[i] != '"') {
+                if (text[i] == '\\' && i + 1 < len) i++;
+                i++;
+            }
+            if (i < len) i++;  /* comilla de cierre */
+            char *s = strndup(text + start, (size_t)(i - start));
+            emit_span(line, s, SPAN_KW_STRING);
+            free(s);
+            at_line_start = 0;
+            continue;
+        }
+
+        /* ── string con comillas simples: '...' ('' = comilla literal) ── */
+        if (text[i] == '\'') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i++;
+            while (i < len) {
+                if (text[i] != '\'') { i++; continue; }
+                if (text[i + 1] == '\'') { i += 2; continue; }
+                i++;  /* comilla de cierre */
+                break;
+            }
+            char *s = strndup(text + start, (size_t)(i - start));
+            emit_span(line, s, SPAN_KW_STRING);
+            free(s);
+            at_line_start = 0;
+            continue;
+        }
+
+        /* ── comentario: # al inicio o precedido de espacio
+               (los strings ya se consumen completos) ── */
+        if (text[i] == '#' &&
+            (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\t')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, text + i, SPAN_KW_COMMENT);
+            return 0;  /* resto de la línea es comentario */
+        }
+
+        /* ── ancla: &nombre ── */
+        if (text[i] == '&' &&
+            (isalnum((unsigned char)text[i + 1]) || text[i + 1] == '_')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i++;
+            while (i < len && (isalnum((unsigned char)text[i]) ||
+                               text[i] == '_' || text[i] == '-'))
+                i++;
+            char *a = strndup(text + start, (size_t)(i - start));
+            emit_span(line, a, SPAN_KW_TYPE);
+            free(a);
+            at_line_start = 0;
+            continue;
+        }
+
+        /* ── tag: !tag, !!str, !<...> ── */
+        if (text[i] == '!') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i++;
+            if (i < len && text[i] == '<') {
+                while (i < len && text[i] != '>') i++;
+                if (i < len) i++;  /* '>' de cierre */
+            } else {
+                while (i < len && (isalnum((unsigned char)text[i]) ||
+                                   text[i] == '_' || text[i] == '-' ||
+                                   text[i] == '!'))
+                    i++;
+            }
+            char *t = strndup(text + start, (size_t)(i - start));
+            emit_span(line, t, SPAN_KW_TYPE);
+            free(t);
+            at_line_start = 0;
+            continue;
+        }
+
+        /* ── alias: *nombre (tras espacio, : , [ o {) ── */
+        if (text[i] == '*' &&
+            (isalnum((unsigned char)text[i + 1]) || text[i + 1] == '_') &&
+            (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\t' ||
+             text[i - 1] == ':' || text[i - 1] == ',' ||
+             text[i - 1] == '[' || text[i - 1] == '{')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i++;
+            while (i < len && (isalnum((unsigned char)text[i]) ||
+                               text[i] == '_' || text[i] == '-'))
+                i++;
+            char *a = strndup(text + start, (size_t)(i - start));
+            emit_span(line, a, SPAN_KW_TYPE);
+            free(a);
+            at_line_start = 0;
+            continue;
+        }
+
+        /* ── indicador de escalar en bloque: | o > ── */
+        if (text[i] == '|' || text[i] == '>') {
+            /* el char no-espacio anterior debe ser : o - */
+            int k = i - 1;
+            while (k >= 0 && (text[k] == ' ' || text[k] == '\t')) k--;
+            int ctx = (k < 0 || text[k] == ':' || text[k] == '-');
+            if (ctx) {
+                /* tras el indicador solo van +- , dígitos 1-9 y
+                   opcionalmente un comentario */
+                int j = i + 1;
+                while (j < len && (text[j] == '+' || text[j] == '-' ||
+                                   (text[j] >= '1' && text[j] <= '9')))
+                    j++;
+                while (j < len && (text[j] == ' ' || text[j] == '\t')) j++;
+                if (j >= len || text[j] == '#') {
+                    cb_flush(&buf, line, SPAN_KW_NORMAL);
+                    int m = i + 1;
+                    while (m < len && (text[m] == '+' || text[m] == '-' ||
+                                       (text[m] >= '1' && text[m] <= '9')))
+                        m++;
+                    char *ind = strndup(text + i, (size_t)(m - i));
+                    emit_span(line, ind, SPAN_KW_KEYWORD);
+                    free(ind);
+                    st->in_yaml_block = 1;
+                    st->yaml_block_indent = indent;
+                    at_line_start = 0;
+                    if (m < j) {  /* espacios antes del comentario */
+                        char *ws = strndup(text + m, (size_t)(j - m));
+                        emit_span(line, ws, SPAN_KW_NORMAL);
+                        free(ws);
+                    }
+                    if (j < len)
+                        emit_span(line, text + j, SPAN_KW_COMMENT);
+                    return 0;
+                }
+            }
+        }
+
+        /* ── literal ~ (null) ── */
+        if (text[i] == '~') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, "~", SPAN_KW_KEYWORD);
+            i++;
+            at_line_start = 0;
+            continue;
+        }
+
+        /* ── identificador: clave si le sigue ":" + espacio/EOL,
+               o literal true/false/null/yes/no/on/off ── */
+        if (isalpha((unsigned char)text[i]) || text[i] == '_') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            while (i < len &&
+                   (isalnum((unsigned char)text[i]) || text[i] == '_' ||
+                    text[i] == '-' || text[i] == '.' ||
+                    (unsigned char)text[i] >= 0x80))
+                i++;
+            char *word = strndup(text + start, (size_t)(i - start));
+
+            /* "palabra:" seguida de espacio o fin de línea → clave */
+            int j = i;
+            while (j < len && (text[j] == ' ' || text[j] == '\t')) j++;
+            int is_key = (j < len && text[j] == ':' &&
+                          (j + 1 >= len || text[j + 1] == ' ' ||
+                           text[j + 1] == '\t'));
+
+            if (is_key || str_in_array(word, yaml_keywords))
+                emit_span(line, word, SPAN_KW_KEYWORD);
+            else
+                emit_span(line, word, SPAN_KW_NORMAL);
+
+            free(word);
+            at_line_start = 0;
+            continue;
+        }
+
+        /* ── cualquier otro carácter: : , [ ] { } etc. ── */
+        cb_put(&buf, text[i++]);
+        at_line_start = 0;
+    }
+
+    cb_flush(&buf, line, SPAN_KW_NORMAL);
+    return 0;
+}
+
 int highlight_line(ParsedLine *line, const char *text,
                    const char *lang, HighlightState *st) {
     const LangDef *ld = find_lang(lang);
@@ -887,6 +1274,10 @@ int highlight_line(ParsedLine *line, const char *text,
     /* Properties/INI: tokenizador especializado (clave=valor) */
     if (ld->is_properties)
         return highlight_properties_line(line, text, st);
+
+    /* YAML: tokenizador especializado (claves, comentarios...) */
+    if (ld->is_yaml)
+        return highlight_yaml_line(line, text, st);
 
     int   len = (int)strlen(text);
     int   i   = 0;

@@ -8,6 +8,8 @@ typedef struct {
     int in_block_comment;   /* dentro de un comentario / * ... * / */
     int in_triple_quote;    /* dentro de un string triple: 1="""  2=''' */
     int in_xml_comment;     /* dentro de un comentario XML <!-- ... --> */
+    int in_yaml_block;      /* dentro de un escalar en bloque YAML (| o >) */
+    int yaml_block_indent;  /* indentación de la línea que abrió el bloque */
 } HighlightState;
 
 /* ── inicializar el estado ── */
