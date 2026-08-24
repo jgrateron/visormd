@@ -30,7 +30,7 @@ Test Markdown inputs (`test/*.md`) and their expected plain-text outputs (`test/
 To regenerate expected outputs after a rendering change:
 
 ```bash
-for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md test/test_blockquote.md test/test_highlight_c.md test/test_highlight_cpp.md test/test_highlight_java.md test/test_highlight_js.md test/test_highlight_cs.md test/test_highlight_vb.md test/test_highlight_json.md test/test_highlight_python.md test/test_highlight_xml.md test/test_highlight_sql.md test/test_highlight_kotlin.md test/test_highlight_gherkin.md test/test_highlight_go.md test/test_highlight_properties.md test/test_highlight_yaml.md test/test_highlight_gitignore.md test/test_highlight_dotenv.md; do
+for f in test/test.md test/test_emoji.md test/test_table.md test/test_table2.md test/test_user.md test/test_utf8.md test/test_wide.md test/test_lista.md test/test_underscore.md test/test_blockquote.md test/test_highlight_c.md test/test_highlight_cpp.md test/test_highlight_java.md test/test_highlight_js.md test/test_highlight_cs.md test/test_highlight_vb.md test/test_highlight_json.md test/test_highlight_python.md test/test_highlight_xml.md test/test_highlight_sql.md test/test_highlight_kotlin.md test/test_highlight_gherkin.md test/test_highlight_go.md test/test_highlight_properties.md test/test_highlight_yaml.md test/test_highlight_gitignore.md test/test_highlight_dotenv.md test/test_highlight_dockerfile.md; do
     base="${f%.md}"
     TERM=xterm-256color LANG=C.UTF-8 ./visormd --cat "$f" > "${base}_expected.txt"
 done
@@ -65,6 +65,7 @@ done
 | `test_highlight_yaml.md` | YAML: claves (`clave: valor` y anidadas), comentarios `#` (con y sin espacio previo, dentro de strings), strings con `'` y `"` (incluido `''` escapado), números (hex/oct/bin, `1_000_000`, `1.5e3`, `.inf`/`.nan`), fechas `2024-01-15` y `2024-01-15T10:30:00`, literales (`true`/`false`/`null`/`yes`/`no`/`on`/`off`/`~`), anclas `&x`, alias `*x`, tags `!!str`/`!custom`/`!<...>`, marcadores `---`/`...`, escalares en bloque `|` `|-` `>` con líneas en blanco, listas `- ` anidadas, URLs y `clave:valor` sin espacio (no resaltados como clave) |
 | `test_highlight_gitignore.md` | Gitignore: comentarios `#` (con y sin indentación), negación `!` al inicio, patrones de archivo (`.env`, `credentials.json`), comodines `*` `**` `?` (`*.pem`, `service-account*.json`, `.env.*.local`, `**/logs`), patrones de directorio con `/` final (`node_modules/`, `.secrets/`), comentario escapado `\#literal` |
 | `test_highlight_dotenv.md` | Dotenv: claves `CLAVE=valor` (con `_`, puntos `APP.PORT` y espacios `FOO = 1`), prefijo `export`, comentarios `#` (inicio de línea, con indentación y al final del valor tras un espacio), valores con comillas `"..."` y `'...'`, `#` dentro de un valor sin espacio previo (`URL=https://x.com/#frag` no es comentario), claves vacías (`EMPTY=`) y líneas sin `=` (no resaltadas como clave) |
+| `test_highlight_dockerfile.md` | Dockerfile: instrucciones case-insensitive (`FROM`, `RUN`, `CMD`, `HEALTHCHECK`, `ONBUILD`, `SHELL`... y `run` en minúsculas), directiva `# syntax=docker/dockerfile:1`, comentarios `#` (con y sin indentación), banderas `--mount=...`/`--from=...`/`--chown=...`/`--interval=...` como tipo, cuerpos multilínea con `\` y argumentos (incluido `CMD` como argumento de `HEALTHCHECK`) como string |
 
 ## Architecture
 
@@ -108,7 +109,7 @@ The default mode is interactive (ncurses), even when reading from a pipe/redirec
    - Theme selector overlay (triggered by F2) is implemented as a static function in `renderer.c` since it needs intimate access to ncurses windows.
 
 6. **`src/highlight.c`** — Syntax highlighting for fenced code blocks:
-   - Maps language identifiers (`c`, `cpp`, `java`, `javascript`, `js`, `ts`, `python`, `py`, `go`, `cs`, `vb`, `json`, `xml`, `html`, `svg`, `yaml`, `yml`, etc.) to keyword/type lists and tokenizer rules. Languages with line-oriented syntax (XML, Properties/INI, YAML, Gitignore, Dotenv) use specialized per-line tokenizers instead of the generic keyword tokenizer.
+   - Maps language identifiers (`c`, `cpp`, `java`, `javascript`, `js`, `ts`, `python`, `py`, `go`, `cs`, `vb`, `json`, `xml`, `html`, `svg`, `yaml`, `yml`, etc.) to keyword/type lists and tokenizer rules. Languages with line-oriented syntax (XML, Properties/INI, YAML, Gitignore, Dotenv, Dockerfile) use specialized per-line tokenizers instead of the generic keyword tokenizer.
    - Tokenizes per-line with a `HighlightState` that tracks multi-line comment (`/* */`) across lines.
    - Produces `SPAN_KW_*` spans: `KEYWORD`, `TYPE`, `STRING`, `COMMENT`, `NUMBER`, `PREPROC`.
    - For Bash (`bash`, `sh`, `zsh`), highlighting is still handled inline in `parser.c` (`parse_bash_line`) with the legacy `SPAN_BASH_*` spans.
