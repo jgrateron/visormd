@@ -19,6 +19,7 @@ typedef struct {
     int          is_gherkin;      /* Gherkin: @tags, <placeholders>, * pasos */
     int          is_properties;   /* Properties/INI: clave=valor, # y ! comentarios */
     int          is_yaml;         /* YAML: clave: valor, comentarios, anclas... */
+    int          is_gitignore;    /* Gitignore: patrones, negación !, # comentarios */
 } LangDef;
 
 /* ──────────────────────────────────────────────
@@ -419,6 +420,19 @@ static const char *yaml_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * Gitignore: los patrones, la negación (!) y los comentarios
+ * se resaltan con un tokenizador especializado,
+ * así que no se necesitan palabras clave ni tipos
+ * ────────────────────────────────────────────── */
+static const char *gitignore_keywords[] = {
+    NULL
+};
+
+static const char *gitignore_types[] = {
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * XML / HTML (markup simple: tags, comentarios, entidades)
  * ────────────────────────────────────────────── */
 static const char *xml_keywords[] = {
@@ -543,60 +557,63 @@ static const char *gherkin_types[] = {
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
-    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0},
-    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0},
-    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0},
-    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0},
-    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0},
-    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0},
-    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0},
-    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0},
-    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0},
-    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0},
-    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0},
-    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0},
-    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0},
-    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0},
-    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0},
-    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0},
-    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0},
-    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0},
-    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0},
-    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0},
-    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0},
-    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0},
-    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0},
-    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0},
-    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0},
-    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1},
-    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1},
-    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0},
-    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0},
-    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
-    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
-    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
-    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
-    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
-    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0},
-    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0},
-    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0},
-    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0},
-    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0},
-    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0},
-    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0},
-    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0},
-    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0},
-    { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0 }
+    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0},
+    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0},
+    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0},
+    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0},
+    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0},
+    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0},
+    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0},
+    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0, 0},
+    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0, 0},
+    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0},
+    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0},
+    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0},
+    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0},
+    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0},
+    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
+    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
+    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
+    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
+    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
+    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
+    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0},
+    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0},
+    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
+    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0},
+    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0},
+    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0},
+    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0},
+    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0},
+    { "gitignore",  gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "git-ignore", gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "ignore",     gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 /* ──────────────────────────────────────────────
@@ -1262,6 +1279,71 @@ static int highlight_yaml_line(ParsedLine *line, const char *text,
     return 0;
 }
 
+/* ══════════════════════════════════════════════════════════════
+ * tokenizador Gitignore: comentarios #, negación ! al inicio,
+ * patrones con comodines (* ** ?) y / final de directorio
+ * ══════════════════════════════════════════════════════════════ */
+static int highlight_gitignore_line(ParsedLine *line, const char *text,
+                                    HighlightState *st) {
+    int len = (int)strlen(text);
+    int i   = 0;
+    (void)st;  /* sin estado que persista entre líneas */
+    CBuf buf;
+    cb_init(&buf);
+
+    /* ── espacios iniciales → texto normal ── */
+    while (i < len && (text[i] == ' ' || text[i] == '\t'))
+        cb_put(&buf, text[i++]);
+
+    /* ── comentario: # como primer carácter no-espacio y sin
+       escaparse (\# es un patrón literal) ── */
+    if (i < len && text[i] == '#' && (i == 0 || text[i - 1] != '\\')) {
+        cb_flush(&buf, line, SPAN_KW_NORMAL);
+        emit_span(line, text + i, SPAN_KW_COMMENT);
+        return 0;
+    }
+
+    /* ── negación: ! al inicio del patrón ── */
+    if (i < len && text[i] == '!') {
+        cb_flush(&buf, line, SPAN_KW_NORMAL);
+        emit_span(line, "!", SPAN_KW_KEYWORD);
+        i++;
+    }
+
+    /* ── patrón: texto normal, comodines * ** ? y / final de
+       directorio como marcadores ── */
+    while (i < len) {
+        if (text[i] == '*') {
+            cb_flush(&buf, line, SPAN_KW_STRING);
+            if (text[i + 1] == '*') {
+                emit_span(line, "**", SPAN_KW_NUMBER);
+                i += 2;
+            } else {
+                emit_span(line, "*", SPAN_KW_NUMBER);
+                i++;
+            }
+            continue;
+        }
+        if (text[i] == '?') {
+            cb_flush(&buf, line, SPAN_KW_STRING);
+            emit_span(line, "?", SPAN_KW_NUMBER);
+            i++;
+            continue;
+        }
+        /* / al final de línea → patrón de directorio */
+        if (text[i] == '/' && i + 1 >= len) {
+            cb_flush(&buf, line, SPAN_KW_STRING);
+            emit_span(line, "/", SPAN_KW_TYPE);
+            i++;
+            continue;
+        }
+        cb_put(&buf, text[i++]);
+    }
+
+    cb_flush(&buf, line, SPAN_KW_STRING);
+    return 0;
+}
+
 int highlight_line(ParsedLine *line, const char *text,
                    const char *lang, HighlightState *st) {
     const LangDef *ld = find_lang(lang);
@@ -1278,6 +1360,10 @@ int highlight_line(ParsedLine *line, const char *text,
     /* YAML: tokenizador especializado (claves, comentarios...) */
     if (ld->is_yaml)
         return highlight_yaml_line(line, text, st);
+
+    /* Gitignore: tokenizador especializado (patrones, ! y #) */
+    if (ld->is_gitignore)
+        return highlight_gitignore_line(line, text, st);
 
     int   len = (int)strlen(text);
     int   i   = 0;
