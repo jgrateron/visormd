@@ -20,6 +20,7 @@ typedef struct {
     int          is_properties;   /* Properties/INI: clave=valor, # y ! comentarios */
     int          is_yaml;         /* YAML: clave: valor, comentarios, anclas... */
     int          is_gitignore;    /* Gitignore: patrones, negación !, # comentarios */
+    int          is_dotenv;       /* Dotenv: CLAVE=valor, export, # comentarios */
 } LangDef;
 
 /* ──────────────────────────────────────────────
@@ -433,6 +434,19 @@ static const char *gitignore_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * Dotenv: las claves, el prefijo export y los comentarios
+ * se resaltan con un tokenizador especializado,
+ * así que no se necesitan palabras clave ni tipos
+ * ────────────────────────────────────────────── */
+static const char *dotenv_keywords[] = {
+    NULL
+};
+
+static const char *dotenv_types[] = {
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * XML / HTML (markup simple: tags, comentarios, entidades)
  * ────────────────────────────────────────────── */
 static const char *xml_keywords[] = {
@@ -557,62 +571,64 @@ static const char *gherkin_types[] = {
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
-    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0},
-    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0},
-    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0},
-    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0},
-    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0},
-    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0},
-    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0},
-    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0, 0},
-    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0, 0},
-    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0},
-    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0},
-    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0},
-    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0},
-    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0},
-    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
-    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
-    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
-    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
-    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
-    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0},
-    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0},
-    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0},
-    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0},
-    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0},
-    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0},
-    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0},
-    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0},
-    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0},
+    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0},
+    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0},
+    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0},
+    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0},
     { "gitignore",  gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0},
     { "git-ignore", gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0},
     { "ignore",     gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "dotenv",     dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1},
+    { "env",        dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1},
     { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
@@ -1344,6 +1360,74 @@ static int highlight_gitignore_line(ParsedLine *line, const char *text,
     return 0;
 }
 
+/* ══════════════════════════════════════════════════════════════
+ * tokenizador Dotenv: comentarios #, prefijo export,
+ * claves CLAVE=valor (keyword) y valores como string
+ * ══════════════════════════════════════════════════════════════ */
+static int highlight_dotenv_line(ParsedLine *line, const char *text,
+                                 HighlightState *st) {
+    int len = (int)strlen(text);
+    int i   = 0;
+    (void)st;  /* sin estado que persista entre líneas */
+    CBuf buf;
+    cb_init(&buf);
+
+    /* ── espacios iniciales → texto normal ── */
+    while (i < len && (text[i] == ' ' || text[i] == '\t'))
+        cb_put(&buf, text[i++]);
+
+    /* ── comentario: # como primer carácter no-espacio ── */
+    if (i < len && text[i] == '#') {
+        cb_flush(&buf, line, SPAN_KW_NORMAL);
+        emit_span(line, text + i, SPAN_KW_COMMENT);
+        return 0;
+    }
+
+    /* ── prefijo export ── */
+    if (strncmp(text + i, "export", 6) == 0 &&
+        (i + 6 >= len || text[i + 6] == ' ' || text[i + 6] == '\t')) {
+        cb_flush(&buf, line, SPAN_KW_NORMAL);
+        emit_span(line, "export", SPAN_KW_KEYWORD);
+        i += 6;
+        while (i < len && (text[i] == ' ' || text[i] == '\t'))
+            cb_put(&buf, text[i++]);
+    }
+
+    /* ── clave: identificador [A-Za-z0-9_.-]+ si le sigue = ── */
+    if (i < len && (isalnum((unsigned char)text[i]) || text[i] == '_')) {
+        int start = i;
+        while (i < len && (isalnum((unsigned char)text[i]) ||
+                           text[i] == '_' || text[i] == '.' || text[i] == '-'))
+            i++;
+        int j = i;
+        while (j < len && (text[j] == ' ' || text[j] == '\t')) j++;
+        if (j < len && text[j] == '=') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            char *key = strndup(text + start, (size_t)(i - start));
+            emit_span(line, key, SPAN_KW_KEYWORD);
+            free(key);
+        } else {
+            /* no hay '=': no es clave, se acumula como parte del valor */
+            for (int k = start; k < i; k++) cb_put(&buf, text[k]);
+        }
+    }
+
+    /* ── valor: string hasta el final; # precedido de espacio
+       (o al inicio del valor) es comentario ── */
+    while (i < len) {
+        if (text[i] == '#' &&
+            (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\t')) {
+            cb_flush(&buf, line, SPAN_KW_STRING);
+            emit_span(line, text + i, SPAN_KW_COMMENT);
+            return 0;
+        }
+        cb_put(&buf, text[i++]);
+    }
+
+    cb_flush(&buf, line, SPAN_KW_STRING);
+    return 0;
+}
+
 int highlight_line(ParsedLine *line, const char *text,
                    const char *lang, HighlightState *st) {
     const LangDef *ld = find_lang(lang);
@@ -1364,6 +1448,10 @@ int highlight_line(ParsedLine *line, const char *text,
     /* Gitignore: tokenizador especializado (patrones, ! y #) */
     if (ld->is_gitignore)
         return highlight_gitignore_line(line, text, st);
+
+    /* Dotenv: tokenizador especializado (CLAVE=valor, export, #) */
+    if (ld->is_dotenv)
+        return highlight_dotenv_line(line, text, st);
 
     int   len = (int)strlen(text);
     int   i   = 0;

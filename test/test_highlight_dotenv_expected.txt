@@ -1,0 +1,34 @@
+Dotenv Highlight Test
+
+Keys with =value, export prefix, comments, quoted values, and keys with dots.
+
+# database
+DATABASE_URL=postgresql://user:password@localhost:5432/mydb
+
+# external services
+STRIPE_SECRET_KEY=sk_test_YOUR_KEY_HERE
+OPENAI_API_KEY=sk-proj-YOUR_KEY_HERE
+JWT_SECRET=generate-with-openssl-rand-hex-32
+
+# export prefix
+export PORT=8080
+export HOST=0.0.0.0
+
+# quoted values
+APP_NAME="Mi App"
+APP_DESCRIPTION='single quoted'
+
+# keys with dots
+APP.PORT=3000
+LOG.LEVEL=debug
+
+# inline comment
+DEBUG=true # solo en desarrollo
+
+# value with # (no comment)
+URL=https://example.com/#fragment
+
+# empty and edge cases
+EMPTY=
+   # indented comment
+FOO BAR=1
