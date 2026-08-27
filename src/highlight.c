@@ -343,6 +343,43 @@ static const char *go_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * Rust
+ * ────────────────────────────────────────────── */
+static const char *rust_keywords[] = {
+    "as", "async", "await", "break", "const",
+    "continue", "crate", "dyn", "else", "enum",
+    "extern", "false", "fn", "for", "if",
+    "impl", "in", "let", "loop", "match",
+    "mod", "move", "mut", "pub", "ref",
+    "return", "self", "static", "struct", "super",
+    "trait", "true", "type", "unsafe", "use",
+    "where", "while", "macro_rules", "union",
+    NULL
+};
+
+static const char *rust_types[] = {
+    /* tipos primitivos */
+    "bool", "char", "i8", "i16", "i32", "i64",
+    "i128", "isize", "u8", "u16", "u32", "u64",
+    "u128", "usize", "f32", "f64", "str",
+    /* tipos de la preluda más comunes */
+    "String", "Vec", "Option", "Result", "Box",
+    "Rc", "Arc", "RefCell", "Cell", "HashMap",
+    "HashSet", "BTreeMap", "BTreeSet", "VecDeque",
+    "LinkedList", "BinaryHeap", "Cow", "Slice",
+    "Iterator", "Future", "Error", "Send", "Sync",
+    "Sized", "Clone", "Copy", "Debug", "Display",
+    "Default", "Drop", "PartialEq", "Eq",
+    "PartialOrd", "Ord", "Hash", "IntoIterator",
+    "FromIterator", "From", "Into", "TryFrom",
+    "TryInto", "AsRef", "AsMut", "Borrow",
+    "BorrowMut", "ToOwned", "ToString",
+    "Fn", "FnMut", "FnOnce", "Sized",
+    "Self",
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * Python
  * ────────────────────────────────────────────── */
 static const char *py_keywords[] = {
@@ -616,6 +653,8 @@ static const LangDef languages[] = {
     { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "rust",       rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "rs",         rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
     { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
     { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
@@ -1741,6 +1780,28 @@ int highlight_line(ParsedLine *line, const char *text,
             cb_flush(&buf, line, SPAN_KW_NORMAL);
             int start = i;
             i++;
+            /* lifetime de Rust: 'a, 'static... — un lifetime es un
+               identificador tras ' sin comilla de cierre inmediata
+               ('a' es un char literal; los escapes \n, \u{...}
+               siempre pertenecen a un char) */
+            if ((strcmp(ld->name, "rust") == 0 ||
+                 strcmp(ld->name, "rs") == 0) &&
+                text[i] != '\\' &&
+                (isalpha((unsigned char)text[i]) || text[i] == '_')) {
+                int j = i;
+                while (j < len &&
+                       (isalnum((unsigned char)text[j]) || text[j] == '_'))
+                    j++;
+                if (j >= len || text[j] != '\'') {
+                    /* lifetime: ' + identificador (sin cierre) */
+                    i = j;
+                    char *s = strndup(text + start, (size_t)(i - start));
+                    emit_span(line, s, SPAN_KW_TYPE);
+                    free(s);
+                    continue;
+                }
+                /* char literal como 'a': cae al escaneo genérico */
+            }
             while (i < len && text[i] != '\'') {
                 if (text[i] == '\\' && i + 1 < len) i++;
                 i++;
@@ -1820,10 +1881,33 @@ int highlight_line(ParsedLine *line, const char *text,
             }
 
         num_suffix:
-            /* sufijos C/C++/Java: f F l L u U ll LL ul UL etc */
-            while (i < len && (text[i] == 'f' || text[i] == 'F' ||
-                   text[i] == 'l' || text[i] == 'L' ||
-                   text[i] == 'u' || text[i] == 'U')) i++;
+            if (strcmp(ld->name, "rust") == 0 ||
+                strcmp(ld->name, "rs") == 0) {
+                /* sufijos Rust: u8..u128, usize, i8..i128, isize, f32, f64
+                   (el orden importa: primero los más largos) */
+                static const char *rust_num_suffixes[] = {
+                    "usize", "isize", "u128", "i128",
+                    "u64", "i64", "u32", "i32",
+                    "u16", "i16", "u8", "i8",
+                    "f64", "f32", NULL
+                };
+                for (int s = 0; rust_num_suffixes[s]; s++) {
+                    size_t sl = strlen(rust_num_suffixes[s]);
+                    if (i + (int)sl <= len &&
+                        strncmp(text + i, rust_num_suffixes[s], sl) == 0 &&
+                        !(i + (int)sl < len &&
+                          (isalnum((unsigned char)text[i + sl]) ||
+                           text[i + sl] == '_'))) {
+                        i += (int)sl;
+                        break;
+                    }
+                }
+            } else {
+                /* sufijos C/C++/Java: f F l L u U ll LL ul UL etc */
+                while (i < len && (text[i] == 'f' || text[i] == 'F' ||
+                       text[i] == 'l' || text[i] == 'L' ||
+                       text[i] == 'u' || text[i] == 'U')) i++;
+            }
 
             /* sufijo JS: n (BigInt) */
             if (i < len && text[i] == 'n') i++;
@@ -1840,6 +1924,33 @@ int highlight_line(ParsedLine *line, const char *text,
             emit_span(line, num, SPAN_KW_NUMBER);
             free(num);
             continue;
+        }
+
+        /* ── raw string de Rust: r"..." o r#"..."# (con 1+ #) ── */
+        if (text[i] == 'r' &&
+            (text[i + 1] == '"' || text[i + 1] == '#') &&
+            (strcmp(ld->name, "rust") == 0 ||
+             strcmp(ld->name, "rs") == 0)) {
+            int hashes = 0;
+            while (text[i + 1 + hashes] == '#') hashes++;
+            if (text[i + 1 + hashes] == '"') {
+                cb_flush(&buf, line, SPAN_KW_NORMAL);
+                int start = i;
+                i += 2 + hashes;  /* r + #... + " */
+                while (i < len) {
+                    if (text[i] == '"' && i + hashes < len) {
+                        int ok = 1;
+                        for (int h = 1; h <= hashes; h++)
+                            if (text[i + h] != '#') { ok = 0; break; }
+                        if (ok) { i += hashes + 1; break; }
+                    }
+                    i++;
+                }
+                char *s = strndup(text + start, (size_t)(i - start));
+                emit_span(line, s, SPAN_KW_STRING);
+                free(s);
+                continue;
+            }
         }
 
         /* ── identificador / palabra clave ── */
