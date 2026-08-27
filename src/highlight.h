@@ -10,6 +10,9 @@ typedef struct {
     int in_xml_comment;     /* dentro de un comentario XML <!-- ... --> */
     int in_yaml_block;      /* dentro de un escalar en bloque YAML (| o >) */
     int yaml_block_indent;  /* indentación de la línea que abrió el bloque */
+    int in_hcl_heredoc;     /* dentro de un heredoc HCL (<<EOF / <<-EOF) */
+    char hcl_heredoc_term[32]; /* terminador del heredoc ("EOF", "EOT"...)
+                                  la línea que lo iguale cierra el bloque */
 } HighlightState;
 
 /* ── inicializar el estado ── */

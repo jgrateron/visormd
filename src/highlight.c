@@ -22,6 +22,7 @@ typedef struct {
     int          is_gitignore;    /* Gitignore: patrones, negación !, # comentarios */
     int          is_dotenv;       /* Dotenv: CLAVE=valor, export, # comentarios */
     int          is_dockerfile;   /* Dockerfile: instrucciones, --flags, # comentarios */
+    int          is_hcl;          /* HCL/Terraform: bloques, atributos, heredocs */
 } LangDef;
 
 /* ──────────────────────────────────────────────
@@ -507,6 +508,32 @@ static const char *dockerfile_instructions[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * HCL / Terraform: los bloques y atributos se resaltan
+ * con un tokenizador especializado; aquí van los bloques
+ * reservados, las palabras de expresión y los literales
+ * ────────────────────────────────────────────── */
+static const char *hcl_keywords[] = {
+    /* bloques de nivel superior */
+    "resource", "data", "variable", "output", "locals",
+    "module", "provider", "terraform", "import", "moved",
+    "check",
+    /* bloques anidados comunes */
+    "backend", "provisioner", "connection", "dynamic",
+    /* palabras de expresión */
+    "for", "in", "if", "else",
+    /* literales */
+    "true", "false", "null",
+    NULL
+};
+
+static const char *hcl_types[] = {
+    /* constructores de tipo */
+    "string", "number", "bool",
+    "list", "set", "map", "object", "tuple", "any",
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * XML / HTML (markup simple: tags, comentarios, entidades)
  * ────────────────────────────────────────────── */
 static const char *xml_keywords[] = {
@@ -631,70 +658,73 @@ static const char *gherkin_types[] = {
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
-    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "rust",       rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "rs",         rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
-    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
-    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0},
-    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0},
-    { "gitignore",  gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "git-ignore", gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "ignore",     gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "dotenv",     dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
-    { "env",        dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
-    { "dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    { "Dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    { "docker",     dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "rust",       rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "rs",         rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
+    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
+    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "gitignore",  gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "git-ignore", gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "ignore",     gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "dotenv",     dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "env",        dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "Dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "docker",     dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "hcl",        hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    { "tf",         hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    { "terraform",  hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 /* ──────────────────────────────────────────────
@@ -831,6 +861,8 @@ void highlight_state_init(HighlightState *st) {
     st->in_xml_comment   = 0;
     st->in_yaml_block    = 0;
     st->yaml_block_indent = 0;
+    st->in_hcl_heredoc   = 0;
+    st->hcl_heredoc_term[0] = '\0';
 }
 
 int highlight_supported(const char *lang) {
@@ -1581,6 +1613,224 @@ static int highlight_dockerfile_line(ParsedLine *line, const char *text,
     return 0;
 }
 
+/* ══════════════════════════════════════════════════════════════
+ * tokenizador HCL / Terraform: nombres de bloque y atributos
+ * (identificador seguido de =, { o "), strings con interpolación
+ * ${...}, comentarios #, // y / * * / (multilínea), números y
+ * heredocs <<EOF, <<-EOF o <<"EOF" (con estado entre líneas)
+ * ══════════════════════════════════════════════════════════════ */
+static int highlight_hcl_line(ParsedLine *line, const char *text,
+                              HighlightState *st) {
+    int len = (int)strlen(text);
+    int i   = 0;
+    CBuf buf;
+    cb_init(&buf);
+
+    /* ── dentro de un heredoc: todo es string hasta que una línea
+       coincida con el terminador (EOF, EOT...) ── */
+    if (st->in_hcl_heredoc) {
+        int j = 0;
+        while (j < len && (text[j] == ' ' || text[j] == '\t')) j++;
+        int k = len;
+        while (k > j && (text[k - 1] == ' ' || text[k - 1] == '\t')) k--;
+        size_t tlen = strlen(st->hcl_heredoc_term);
+        if ((size_t)(k - j) == tlen &&
+            strncmp(text + j, st->hcl_heredoc_term, tlen) == 0)
+            st->in_hcl_heredoc = 0;  /* línea del terminador */
+        emit_span(line, text, SPAN_KW_STRING);
+        return 0;
+    }
+
+    /* ── si venimos de un comentario / * ... * / abierto ── */
+    if (st->in_block_comment) {
+        const char *end = strstr(text, "*/");
+        if (end) {
+            int comment_end = (int)(end - text) + 2;
+            char *comment = strndup(text, (size_t)comment_end);
+            emit_span(line, comment, SPAN_KW_COMMENT);
+            free(comment);
+            i = comment_end;
+            st->in_block_comment = 0;
+        } else {
+            /* toda la línea es comentario */
+            emit_span(line, text, SPAN_KW_COMMENT);
+            return 0;
+        }
+    }
+
+    while (i < len) {
+        /* ── espacios y tabs → texto normal ── */
+        if (text[i] == ' ' || text[i] == '\t') {
+            cb_put(&buf, text[i++]);
+            continue;
+        }
+
+        /* ── string con comillas dobles: "..." (la interpolación
+           ${...} queda dentro del string) ── */
+        if (text[i] == '"') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i++;
+            while (i < len && text[i] != '"') {
+                if (text[i] == '\\' && i + 1 < len) i++;
+                i++;
+            }
+            if (i < len) i++;  /* comilla de cierre */
+            char *s = strndup(text + start, (size_t)(i - start));
+            emit_span(line, s, SPAN_KW_STRING);
+            free(s);
+            continue;
+        }
+
+        /* ── comentario de línea: # ── */
+        if (text[i] == '#') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, text + i, SPAN_KW_COMMENT);
+            return 0;  /* resto de la línea es comentario */
+        }
+
+        /* ── comentario de línea: // ── */
+        if (text[i] == '/' && text[i + 1] == '/') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, text + i, SPAN_KW_COMMENT);
+            return 0;  /* resto de la línea es comentario */
+        }
+
+        /* ── comentario multilinea apertura: / * ── */
+        if (text[i] == '/' && text[i + 1] == '*') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i += 2;
+            const char *end = strstr(text + i, "*/");
+            if (end) {
+                i = (int)(end - text) + 2;
+                char *comment = strndup(text + start, (size_t)(i - start));
+                emit_span(line, comment, SPAN_KW_COMMENT);
+                free(comment);
+            } else {
+                /* multilínea que continúa en la siguiente línea */
+                emit_span(line, text + start, SPAN_KW_COMMENT);
+                st->in_block_comment = 1;
+                return 0;
+            }
+            continue;
+        }
+
+        /* ── heredoc: <<EOF, <<-EOF o <<"EOF" ── */
+        if (text[i] == '<' && text[i + 1] == '<') {
+            int j = i + 2;
+            if (text[j] == '-') j++;  /* <<- : se ignoran tabs iniciales */
+            if (text[j] == '"' || text[j] == '\'') {
+                /* terminador entre comillas: <<"EOF" */
+                int q = j + 1;
+                int qend = q;
+                while (qend < len && text[qend] != text[j]) qend++;
+                if (qend < len) {
+                    int tlen = qend - q;
+                    if (tlen < (int)sizeof(st->hcl_heredoc_term)) {
+                        memcpy(st->hcl_heredoc_term, text + q, (size_t)tlen);
+                        st->hcl_heredoc_term[tlen] = '\0';
+                    }
+                    cb_flush(&buf, line, SPAN_KW_NORMAL);
+                    char *hd = strndup(text + i, (size_t)(qend + 1 - i));
+                    emit_span(line, hd, SPAN_KW_STRING);
+                    free(hd);
+                    st->in_hcl_heredoc = 1;
+                    i = qend + 1;
+                    if (i < len) emit_span(line, text + i, SPAN_KW_STRING);
+                    return 0;
+                }
+            } else if (isalpha((unsigned char)text[j]) || text[j] == '_') {
+                int wend = j;
+                while (wend < len &&
+                       (isalnum((unsigned char)text[wend]) ||
+                        text[wend] == '_')) wend++;
+                int tlen = wend - j;
+                if (tlen < (int)sizeof(st->hcl_heredoc_term)) {
+                    memcpy(st->hcl_heredoc_term, text + j, (size_t)tlen);
+                    st->hcl_heredoc_term[tlen] = '\0';
+                }
+                cb_flush(&buf, line, SPAN_KW_NORMAL);
+                char *hd = strndup(text + i, (size_t)(wend - i));
+                emit_span(line, hd, SPAN_KW_STRING);
+                free(hd);
+                st->in_hcl_heredoc = 1;
+                i = wend;
+                if (i < len) emit_span(line, text + i, SPAN_KW_STRING);
+                return 0;
+            }
+            /* << no seguido de un terminador: se trata como operador */
+        }
+
+        /* ── número: entero, .5, negativo, float, exponente, 0x ── */
+        if (isdigit((unsigned char)text[i]) ||
+            (text[i] == '-' && isdigit((unsigned char)text[i + 1])) ||
+            (text[i] == '.' && isdigit((unsigned char)text[i + 1]))) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            if (text[i] == '-') i++;  /* signo negativo */
+            if (text[i] == '0' && (text[i + 1] == 'x' || text[i + 1] == 'X')) {
+                i += 2;
+                while (i < len && is_hex_digit(text[i])) i++;
+            } else {
+                if (text[i] == '.') i++;  /* .5 */
+                while (i < len && isdigit((unsigned char)text[i])) i++;
+                /* parte fraccionaria */
+                if (i < len && text[i] == '.') {
+                    i++;
+                    while (i < len && isdigit((unsigned char)text[i])) i++;
+                }
+                /* exponente */
+                if (i < len && (text[i] == 'e' || text[i] == 'E')) {
+                    i++;
+                    if (i < len && (text[i] == '+' || text[i] == '-')) i++;
+                    while (i < len && isdigit((unsigned char)text[i])) i++;
+                }
+            }
+            char *num = strndup(text + start, (size_t)(i - start));
+            emit_span(line, num, SPAN_KW_NUMBER);
+            free(num);
+            continue;
+        }
+
+        /* ── identificador: nombre de bloque o atributo si le sigue
+           (tras espacios) =, { o " ; si no, palabra clave o tipo ── */
+        if (isalpha((unsigned char)text[i]) || text[i] == '_') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            while (i < len &&
+                   (isalnum((unsigned char)text[i]) || text[i] == '_' ||
+                    text[i] == '-'))
+                i++;
+            char *word = strndup(text + start, (size_t)(i - start));
+
+            int j = i;
+            while (j < len && (text[j] == ' ' || text[j] == '\t')) j++;
+            char nx = (j < len) ? text[j] : '\0';
+
+            SpanType t;
+            if (nx == '=' || nx == '{' || nx == '"')
+                t = SPAN_KW_KEYWORD;      /* atributo o nombre de bloque */
+            else if (str_in_array(word, hcl_keywords))
+                t = SPAN_KW_KEYWORD;
+            else if (str_in_array(word, hcl_types))
+                t = SPAN_KW_TYPE;
+            else
+                t = SPAN_KW_NORMAL;
+
+            emit_span(line, word, t);
+            free(word);
+            continue;
+        }
+
+        /* ── cualquier otro carácter: operadores, puntuación, etc. ── */
+        cb_put(&buf, text[i++]);
+    }
+
+    cb_flush(&buf, line, SPAN_KW_NORMAL);
+    return 0;
+}
+
 int highlight_line(ParsedLine *line, const char *text,
                    const char *lang, HighlightState *st) {
     const LangDef *ld = find_lang(lang);
@@ -1609,6 +1859,10 @@ int highlight_line(ParsedLine *line, const char *text,
     /* Dockerfile: tokenizador especializado (instrucciones, --flags) */
     if (ld->is_dockerfile)
         return highlight_dockerfile_line(line, text, st);
+
+    /* HCL/Terraform: tokenizador especializado (bloques, heredocs) */
+    if (ld->is_hcl)
+        return highlight_hcl_line(line, text, st);
 
     int   len = (int)strlen(text);
     int   i   = 0;
