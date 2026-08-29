@@ -99,6 +99,9 @@ struct Renderer {
     int         theme_idx;      /* índice en themes[] */
     int         mouse_enabled;  /* 1 = ratón habilitado (config "mouse=on") */
     int         center_slide;   /* 1 = centrar filas (modo presentación) */
+    int         slide_margin;   /* margen lateral (izq y der) en modo
+                                   presentación; solo activo dentro de
+                                   presentation_show, 0 en el resto */
 };
 
 /* ──────────────────────────────────────────────
@@ -413,6 +416,49 @@ static int build_visual_lines(wchar_t *chars, int total, int avail_w,
     return line_count;
 }
 
+/* ── ajustar los anchos de columna de una tabla a cell_avail, con un
+   mínimo de 3 caracteres por columna. Si los mínimos exceden el espacio
+   disponible, se rebajan primero las columnas más anchas (las que están
+   por encima del mínimo); solo si ni así cabe se permite que la tabla
+   se desborde (se recorta en el borde de la pantalla) ── */
+static void table_adjust_widths(const ParsedLine *line, int cell_avail,
+                                int *adj_w) {
+    int ncols = line->table_cols;
+    int total_req = 0;
+    for (int c = 0; c < ncols; c++) total_req += line->table_widths[c];
+
+    if (total_req <= cell_avail) {
+        for (int c = 0; c < ncols; c++) adj_w[c] = line->table_widths[c];
+        return;
+    }
+
+    /* reparto proporcional, respetando el mínimo de 3 */
+    int alloc = 0;
+    for (int c = 0; c < ncols; c++) {
+        adj_w[c] = line->table_widths[c] * cell_avail / total_req;
+        if (adj_w[c] < 3) adj_w[c] = 3;
+        alloc += adj_w[c];
+    }
+
+    if (alloc <= cell_avail) {
+        int rem = cell_avail - alloc;
+        for (int c = 0; c < ncols && rem > 0; c++) { adj_w[c]++; rem--; }
+        return;
+    }
+
+    /* el mínimo por columna se pasó del espacio: rebajar las columnas
+       más anchas (por encima del mínimo) hasta que quepa */
+    while (alloc > cell_avail) {
+        int best = -1;
+        for (int c = 0; c < ncols; c++)
+            if (adj_w[c] > 3 && (best < 0 || adj_w[c] > adj_w[best]))
+                best = c;
+        if (best < 0) break;   /* todas en el mínimo: no cabe */
+        adj_w[best]--;
+        alloc--;
+    }
+}
+
 /* ──────────────────────────────────────────────
  * cantidad de filas que ocupa la línea en pantalla
  * usa wcwidth para anchos reales (emoji=2, CJK=2)
@@ -434,24 +480,10 @@ static int line_wrapped_rows(ParsedLine *line, int avail_w,
         int cell_avail = avail_w - pipes_w;
         if (cell_avail < ncols * 3) cell_avail = ncols * 3;
 
-        int total_req = 0;
-        for (int c = 0; c < ncols; c++) total_req += line->table_widths[c];
-
         int *adj_w = malloc(sizeof(int) * (size_t)ncols);
         if (!adj_w) return 1;
 
-        if (total_req > cell_avail) {
-            int alloc = 0;
-            for (int c = 0; c < ncols; c++) {
-                adj_w[c] = line->table_widths[c] * cell_avail / total_req;
-                if (adj_w[c] < 3) adj_w[c] = 3;
-                alloc += adj_w[c];
-            }
-            int rem = cell_avail - alloc;
-            for (int c = 0; c < ncols && rem > 0; c++) { adj_w[c]++; rem--; }
-        } else {
-            for (int c = 0; c < ncols; c++) adj_w[c] = line->table_widths[c];
-        }
+        table_adjust_widths(line, cell_avail, adj_w);
 
         /* ── encontrar rangos de spans por columna ── */
         int *cell_start = calloc((size_t)ncols, sizeof(int));
@@ -546,6 +578,14 @@ static int line_wrapped_rows(ParsedLine *line, int avail_w,
                 rows++;
             }
             col += cw;
+            /* termina justo en el borde y quedan más caracteres: la
+               fila siguiente arranca ya (mismo criterio que el
+               renderer, evita filas fantasma al estimar) */
+            if (col >= eff_w && (j + 1 < wlen || i + 1 < line->span_count)) {
+                col = indent;
+                eff_w = avail_w - indent;
+                rows++;
+            }
         }
     }
     return rows;
@@ -595,6 +635,23 @@ static int table_center_offset(Renderer *r, const int *adj_w, int ncols,
     return table_w < avail_w ? (avail_w - table_w) / 2 : 0;
 }
 
+/* ── margen izquierdo y ancho útil efectivos. El margen lateral de
+   presentación se suma a la izquierda y se descuenta del ancho (hueco
+   simétrico), y se acota al ancho del terminal: 2*margen + base nunca
+   supera term_w, o el contenido se dibujaría fuera de pantalla ── */
+static void content_geometry(Renderer *r, int *out_margin, int *out_avail) {
+    int base = r->show_numbers ? 6 : 2;
+    int sm   = r->slide_margin;
+    int max_sm = (r->term_w - base) / 2;
+    if (max_sm < 0) max_sm = 0;
+    if (sm > max_sm) sm = max_sm;
+    int margin = base + sm;
+    int avail  = r->term_w - margin - sm;
+    if (avail < 1) avail = 1;
+    if (out_margin) *out_margin = margin;
+    if (out_avail)  *out_avail  = avail;
+}
+
 /* ──────────────────────────────────────────────
  * renderizar una línea fuente en pantalla
  * retorna cuántas filas de pantalla se usaron
@@ -604,9 +661,9 @@ static int render_source_line(Renderer *r, int line_idx,
     if (screen_y >= r->content_h) return 0;
 
     ParsedLine *line = &r->doc->lines[line_idx];
-    int margin  = r->show_numbers ? 6 : 2;
-    int avail_w = r->term_w - margin;
-    if (avail_w < 1) avail_w = 1;
+    int margin  = 0;
+    int avail_w = 0;
+    content_geometry(r, &margin, &avail_w);
 
     /* ── línea vacía ── */
     if (line->type == LINE_EMPTY) {
@@ -648,24 +705,10 @@ static int render_source_line(Renderer *r, int line_idx,
         int cell_avail = avail_w - pipes_w;
         if (cell_avail < ncols * 3) cell_avail = ncols * 3;
 
-        int total_req = 0;
-        for (int c = 0; c < ncols; c++) total_req += line->table_widths[c];
-
         int *adj_w = malloc(sizeof(int) * (size_t)ncols);
         if (!adj_w) return 1;
 
-        if (total_req > cell_avail) {
-            int alloc = 0;
-            for (int c = 0; c < ncols; c++) {
-                adj_w[c] = line->table_widths[c] * cell_avail / total_req;
-                if (adj_w[c] < 3) adj_w[c] = 3;
-                alloc += adj_w[c];
-            }
-            int rem = cell_avail - alloc;
-            for (int c = 0; c < ncols && rem > 0; c++) { adj_w[c]++; rem--; }
-        } else {
-            for (int c = 0; c < ncols; c++) adj_w[c] = line->table_widths[c];
-        }
+        table_adjust_widths(line, cell_avail, adj_w);
 
         /* elegir caracteres según tipo de borde */
         const char *left, *mid, *right;
@@ -751,24 +794,10 @@ static int render_source_line(Renderer *r, int line_idx,
         int cell_avail = avail_w - pipes_w;
         if (cell_avail < ncols * 3) cell_avail = ncols * 3;
 
-        int total_req = 0;
-        for (int c = 0; c < ncols; c++) total_req += line->table_widths[c];
-
         int *adj_w = malloc(sizeof(int) * (size_t)ncols);
         if (!adj_w) return 1;
 
-        if (total_req > cell_avail) {
-            int alloc = 0;
-            for (int c = 0; c < ncols; c++) {
-                adj_w[c] = line->table_widths[c] * cell_avail / total_req;
-                if (adj_w[c] < 3) adj_w[c] = 3;
-                alloc += adj_w[c];
-            }
-            int rem = cell_avail - alloc;
-            for (int c = 0; c < ncols && rem > 0; c++) { adj_w[c]++; rem--; }
-        } else {
-            for (int c = 0; c < ncols; c++) adj_w[c] = line->table_widths[c];
-        }
+        table_adjust_widths(line, cell_avail, adj_w);
 
         /* ── encontrar rangos de spans por columna ── */
         int *cell_start = calloc((size_t)ncols, sizeof(int));
@@ -1209,7 +1238,10 @@ static int render_source_line(Renderer *r, int line_idx,
             wi  += seg_chars;
             col += seg_width;
 
-            if (col >= eff_w) {
+            /* se agotó la fila; si quedan más caracteres (en este span
+               o en los siguientes) la fila siguiente arranca ya. Si la
+               línea acaba justo en el borde, no se cuenta fila extra */
+            if (col >= eff_w && (wi < wlen || s + 1 < line->span_count)) {
                 col = list_ind;
                 wrap_row++;
                 if (wrap_row >= skip_rows)
@@ -1383,6 +1415,7 @@ Renderer *renderer_create(Document *doc, const char *filename,
     r->mouse_valid  = 0;
     r->mouse_enabled = 0;
     r->center_slide = 0;
+    r->slide_margin = 0;
 
     /* iniciar ncurses */
     initscr();
@@ -2562,8 +2595,8 @@ static void presentation_draw_status(Renderer *r, int idx, int count,
 
     char buf[128];
     snprintf(buf, sizeof(buf),
-             "Diapositiva %d/%d%s  [c]entrar [←/→] [q] salir",
-             idx + 1, count, truncated ? " ▼" : "");
+             "Diapo %d/%d%s  m:%d  [c] [-/+] [←/→] [q] salir",
+             idx + 1, count, truncated ? " ▼" : "", r->slide_margin);
 
     /* centrar por columnas visuales (▼/←/→ ocupan 1 columna pero 3 bytes) */
     wchar_t wbuf[128];
@@ -2584,7 +2617,10 @@ static void presentation_draw_status(Renderer *r, int idx, int count,
 static void presentation_draw_slide(Renderer *r, const SlideRange *slides,
                                     int count, int idx) {
     const SlideRange *s = &slides[idx];
-    int avail = avail_width(r);
+    /* el mismo ancho útil que usa render_source_line (incluido el
+       margen de presentación y su límite respecto a term_w) */
+    int avail = 0;
+    content_geometry(r, NULL, &avail);
 
     /* altura total de la diapositiva con el ancho actual */
     int h = 0;
@@ -2672,12 +2708,31 @@ static void presentation_show(Renderer *r) {
     r->show_numbers = 0;
     r->show_raw     = 0;
     r->center_slide = 0;
+    /* el margen lateral solo vive dentro del modo presentación: se
+       carga de la config y se persiste una sola vez al salir si cambió */
+    r->slide_margin = config_load_slide_margin();
+    int margin_initial = r->slide_margin;
 
     int done = 0;
     while (!done) {
         presentation_draw_slide(r, slides, count, cur);
 
         int ch = renderer_getch(r);
+
+        /* teclado numérico en modo aplicación: '+' y '-' llegan como
+           ESC O m / ESC O l, que no todas las terminfo traducen a
+           teclas; si llega un ESC, se mira si continúa esa secuencia */
+        if (ch == 27) {
+            timeout(50);
+            int c2 = wgetch(stdscr);
+            timeout(50);
+            int c3 = (c2 == 'O') ? wgetch(stdscr) : ERR;
+            timeout(-1);
+            if (c3 == 'm')      ch = '+';
+            else if (c3 == 'l') ch = '-';
+            /* cualquier otra secuencia se trata como ESC a secas */
+        }
+
         switch (ch) {
         case ' ':
         case KEY_RIGHT:
@@ -2700,6 +2755,26 @@ static void presentation_show(Renderer *r) {
         case 'c':
         case 'C':
             r->center_slide = !r->center_slide;
+            break;
+
+        case '-':
+        case '_':
+            /* menos margen lateral */
+            if (r->slide_margin > 0)
+                r->slide_margin--;
+            break;
+
+        case '+':
+        case '=':
+            /* más margen lateral, acotado al ancho del terminal
+               (2*margen + 2 de base no puede superar term_w) */
+            {
+                int maxm = (r->term_w - 2) / 2;
+                if (maxm > SLIDE_MARGIN_MAX) maxm = SLIDE_MARGIN_MAX;
+                if (maxm < 0) maxm = 0;
+                if (r->slide_margin < maxm)
+                    r->slide_margin++;
+            }
             break;
 
         case 'g':
@@ -2747,6 +2822,14 @@ static void presentation_show(Renderer *r) {
     r->show_numbers = saved_numbers;
     r->show_raw     = saved_raw;
     r->center_slide = saved_center;
+    /* persistir el margen si cambió en esta sesión: una sola escritura
+       a la config; si falla se avisa con un beep */
+    if (r->slide_margin != margin_initial) {
+        if (config_save_slide_margin(r->slide_margin) != 0)
+            beep();
+    }
+    /* fuera del modo presentación el margen lateral no se aplica */
+    r->slide_margin = 0;
     free(slides);
     renderer_draw(r);
 }

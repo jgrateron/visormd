@@ -38,6 +38,10 @@
 #define CP_FIRST  1
 #define CP_COUNT  31   /* índices 1..30, posición 0 sin usar */
 
+/* ── margen lateral del modo presentación (clave "slide_margin") ── */
+#define SLIDE_MARGIN_DEFAULT 5
+#define SLIDE_MARGIN_MAX     30
+
 /* ── un par foreground / background ── */
 typedef struct {
     short fg;
@@ -61,5 +65,7 @@ int config_get_path(char *buf, size_t bufsz);
 int config_load_theme(void);
 int config_load_mouse(void);   /* 1 = "mouse=on", 0 en cualquier otro caso */
 int config_save_theme(const char *theme_id);
+int config_load_slide_margin(void);   /* por defecto SLIDE_MARGIN_DEFAULT */
+int config_save_slide_margin(int n);
 
 #endif

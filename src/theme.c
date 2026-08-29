@@ -474,6 +474,25 @@ int config_load_mouse(void) {
     return on;
 }
 
+/* ── margen lateral del modo presentación (espacios a izquierda y
+   derecha).  Valores fuera de rango se ignoran y se usa el de
+   defecto. ── */
+int config_load_slide_margin(void) {
+    int   n   = SLIDE_MARGIN_DEFAULT;
+    char *val = config_read_value("slide_margin");
+    if (val) {
+        /* solo números enteros válidos (atoi aceptaría basura como
+           "abc" → 0 y la pasaría como si fuera un margen intencional) */
+        char *end = NULL;
+        long parsed = strtol(val, &end, 10);
+        if (end && end != val && *end == '\0' &&
+            parsed >= 0 && parsed <= SLIDE_MARGIN_MAX)
+            n = (int)parsed;
+        free(val);
+    }
+    return n;
+}
+
 /* ── crear directorios recursivamente (como mkdir -p) ── */
 static int mkdir_p(const char *path, mode_t mode) {
     char tmp[1024];
@@ -544,4 +563,10 @@ static int config_save_key(const char *key, const char *value) {
 
 int config_save_theme(const char *theme_id) {
     return config_save_key("theme", theme_id ? theme_id : "default");
+}
+
+int config_save_slide_margin(int n) {
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%d", n);
+    return config_save_key("slide_margin", buf);
 }

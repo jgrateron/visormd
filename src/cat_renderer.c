@@ -439,20 +439,38 @@ static int *table_adj_widths(ParsedLine *line, int avail_w, int ncols) {
     int *adj_w = malloc(sizeof(int) * (size_t)ncols);
     if (!adj_w) return NULL;
 
-    if (total_req > cell_avail) {
-        int alloc = 0;
-        for (int c = 0; c < ncols; c++) {
-            adj_w[c] = line->table_widths[c] * cell_avail / total_req;
-            if (adj_w[c] < 3) adj_w[c] = 3;
-            alloc += adj_w[c];
-        }
+    if (total_req <= cell_avail) {
+        for (int c = 0; c < ncols; c++)
+            adj_w[c] = line->table_widths[c];
+        return adj_w;
+    }
+
+    /* reparto proporcional, respetando el mínimo de 3 */
+    int alloc = 0;
+    for (int c = 0; c < ncols; c++) {
+        adj_w[c] = line->table_widths[c] * cell_avail / total_req;
+        if (adj_w[c] < 3) adj_w[c] = 3;
+        alloc += adj_w[c];
+    }
+
+    if (alloc <= cell_avail) {
         int rem = cell_avail - alloc;
         for (int c = 0; c < ncols && rem > 0; c++) {
             adj_w[c]++; rem--;
         }
-    } else {
+        return adj_w;
+    }
+
+    /* el mínimo por columna se pasó del espacio: rebajar las columnas
+       más anchas (por encima del mínimo) hasta que quepa */
+    while (alloc > cell_avail) {
+        int best = -1;
         for (int c = 0; c < ncols; c++)
-            adj_w[c] = line->table_widths[c];
+            if (adj_w[c] > 3 && (best < 0 || adj_w[c] > adj_w[best]))
+                best = c;
+        if (best < 0) break;   /* todas en el mínimo: no cabe */
+        adj_w[best]--;
+        alloc--;
     }
 
     return adj_w;
