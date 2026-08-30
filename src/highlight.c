@@ -23,6 +23,7 @@ typedef struct {
     int          is_dotenv;       /* Dotenv: CLAVE=valor, export, # comentarios */
     int          is_dockerfile;   /* Dockerfile: instrucciones, --flags, # comentarios */
     int          is_hcl;          /* HCL/Terraform: bloques, atributos, heredocs */
+    int          is_makefile;     /* Makefile: variables, targets, recetas, $(VAR) */
 } LangDef;
 
 /* ──────────────────────────────────────────────
@@ -655,76 +656,102 @@ static const char *gherkin_types[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * Makefile: las variables (CLAVE=valor), los targets (nombre:),
+ * las directivas y las recetas se resaltan con un tokenizador
+ * especializado; aquí van las directivas
+ * ────────────────────────────────────────────── */
+static const char *makefile_keywords[] = {
+    NULL
+};
+
+static const char *makefile_types[] = {
+    NULL
+};
+
+static const char *makefile_directives[] = {
+    "include", "sinclude",
+    "export", "unexport", "override", "undefine",
+    "define", "endef", "ifdef", "ifndef",
+    "ifeq", "ifneq", "else", "endif",
+    "vpath", "error", "warning",
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
-    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "rust",       rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "rs",         rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
-    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
-    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
-    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "gitignore",  gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
-    { "git-ignore", gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
-    { "ignore",     gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
-    { "dotenv",     dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "env",        dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
-    { "Dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
-    { "docker",     dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
-    { "hcl",        hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    { "tf",         hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    { "terraform",  hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "rust",       rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "rs",         rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "gitignore",  gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
+    { "git-ignore", gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
+    { "ignore",     gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
+    { "dotenv",     dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "env",        dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "Dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "docker",     dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "hcl",        hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "tf",         hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "terraform",  hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "makefile",   makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    { "Makefile",   makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    { "make",       makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    { "mk",         makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 /* ──────────────────────────────────────────────
@@ -1831,6 +1858,284 @@ static int highlight_hcl_line(ParsedLine *line, const char *text,
     return 0;
 }
 
+/* ══════════════════════════════════════════════════════════════
+ * tokenizador Makefile: variables (CLAVE=valor y := ?= += !=),
+ * targets (nombre:), directivas (include, ifdef...), recetas
+ * (líneas con tab o con prefijo - / @) y referencias de variable
+ * $(X), ${X}, $@, $$(cmd)... (con # como comentario)
+ * ══════════════════════════════════════════════════════════════ */
+
+/* ── escanea el resto de la línea (valor de variable, dependencias
+   o cuerpo de receta): el texto se acumula con el tipo base; las
+   referencias de variable $(X), ${X}, $@, $$(cmd) van como tipo y
+   # precedido de espacio (o al inicio) como comentario ── */
+static void makefile_scan_body(ParsedLine *line, const char *text,
+                               int *ip, int len, CBuf *buf,
+                               SpanType base) {
+    int i = *ip;
+    while (i < len) {
+        /* ── comentario: # precedido de espacio (o al inicio) ── */
+        if (text[i] == '#' &&
+            (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\t')) {
+            cb_flush(buf, line, base);
+            emit_span(line, text + i, SPAN_KW_COMMENT);
+            *ip = len;
+            return;
+        }
+        /* ── referencia de variable: $(...), ${...}, $@, $$(cmd) ── */
+        if (text[i] == '$') {
+            cb_flush(buf, line, base);
+            int start = i;
+            int depth = 0;
+            i++;
+            if (i < len && text[i] == '$') {
+                /* $$ : dólar escapado (puede preceder a $(cmd) del shell) */
+                i++;
+                if (i < len && (text[i] == '(' || text[i] == '{')) {
+                    depth = 1;
+                    i++;
+                }
+            } else if (i < len && (text[i] == '(' || text[i] == '{')) {
+                depth = 1;
+                i++;
+            }
+            if (depth) {
+                /* consumir hasta el cierre, contando anidamientos */
+                while (i < len && depth > 0) {
+                    if (text[i] == '(' || text[i] == '{') depth++;
+                    else if (text[i] == ')' || text[i] == '}') depth--;
+                    if (depth == 0) { i++; break; }
+                    i++;
+                }
+            } else if (i < len &&
+                       (isalnum((unsigned char)text[i]) || text[i] == '_')) {
+                /* $NOMBRE o $$NOMBRE */
+                while (i < len &&
+                       (isalnum((unsigned char)text[i]) || text[i] == '_'))
+                    i++;
+            } else if (i < len) {
+                /* $@, $<, $^...: un solo carácter */
+                i++;
+            }
+            char *ref = strndup(text + start, (size_t)(i - start));
+            emit_span(line, ref, SPAN_KW_TYPE);
+            free(ref);
+            continue;
+        }
+        cb_put(buf, text[i++]);
+    }
+    cb_flush(buf, line, base);
+    *ip = i;
+}
+
+/* ── si en la posición dada hay una definición de variable
+   (CLAVE= o CLAVE := ?= += !=), emite la clave como keyword y el
+   operador como texto normal, y devuelve 1; si no, devuelve 0
+   (usado tras una directiva: export FOO=bar) ── */
+static int makefile_emit_var_def(ParsedLine *line, const char *text,
+                                 int *ip, int len) {
+    int i = *ip;
+    if (i >= len || !(isalnum((unsigned char)text[i]) || text[i] == '_'))
+        return 0;
+    int start = i;
+    while (i < len && (isalnum((unsigned char)text[i]) || text[i] == '_' ||
+                       text[i] == '.' || text[i] == '-'))
+        i++;
+    int j = i;
+    while (j < len && (text[j] == ' ' || text[j] == '\t')) j++;
+    int is_assign = (j < len && text[j] == '=') ||
+                    (j + 1 < len && (text[j] == ':' || text[j] == '?' ||
+                                     text[j] == '+' || text[j] == '!') &&
+                     text[j + 1] == '=');
+    if (!is_assign) return 0;
+    char *key = strndup(text + start, (size_t)(i - start));
+    emit_span(line, key, SPAN_KW_KEYWORD);
+    free(key);
+    /* espacios entre la clave y el operador → texto normal */
+    if (j > i) {
+        char *gap = strndup(text + i, (size_t)(j - i));
+        emit_span(line, gap, SPAN_KW_NORMAL);
+        free(gap);
+    }
+    /* operador de asignación → texto normal */
+    int op_len = (text[j] == '=') ? 1 : 2;
+    char *op = strndup(text + j, (size_t)op_len);
+    emit_span(line, op, SPAN_KW_NORMAL);
+    free(op);
+    *ip = j + op_len;
+    return 1;
+}
+
+static int highlight_makefile_line(ParsedLine *line, const char *text,
+                                   HighlightState *st) {
+    int len = (int)strlen(text);
+    int i   = 0;
+    (void)st;  /* sin estado que persista entre líneas */
+    CBuf buf;
+    cb_init(&buf);
+
+    /* ── indentación → texto normal (el tab delata una receta) ── */
+    int has_tab = 0;
+    while (i < len && (text[i] == ' ' || text[i] == '\t')) {
+        if (text[i] == '\t') has_tab = 1;
+        cb_put(&buf, text[i++]);
+    }
+
+    /* ── comentario: # como primer carácter no-espacio ── */
+    if (i < len && text[i] == '#') {
+        cb_flush(&buf, line, SPAN_KW_NORMAL);
+        emit_span(line, text + i, SPAN_KW_COMMENT);
+        return 0;
+    }
+
+    /* ── receta: línea con tab inicial (cuerpo → string) ── */
+    if (has_tab) {
+        cb_flush(&buf, line, SPAN_KW_NORMAL);
+        /* prefijo - (ignorar errores) o @ (silencioso) */
+        if (text[i] == '-' || text[i] == '@') {
+            char pref[2] = { text[i], '\0' };
+            emit_span(line, pref, SPAN_KW_KEYWORD);
+            i++;
+        }
+        makefile_scan_body(line, text, &i, len, &buf, SPAN_KW_STRING);
+        return 0;
+    }
+
+    /* ── directiva -include / -sinclude ── */
+    if (i < len && text[i] == '-') {
+        int dlen = 0;
+        if (strncmp(text + i, "-include", 8) == 0) dlen = 8;
+        else if (strncmp(text + i, "-sinclude", 9) == 0) dlen = 9;
+        if (dlen && (i + dlen >= len || text[i + dlen] == ' ' ||
+                     text[i + dlen] == '\t')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            char *w = strndup(text + i, (size_t)dlen);
+            emit_span(line, w, SPAN_KW_KEYWORD);
+            free(w);
+            i += dlen;
+            makefile_scan_body(line, text, &i, len, &buf, SPAN_KW_NORMAL);
+            return 0;
+        }
+    }
+
+    /* ── receta sin tab: prefijo - (ignorar errores) o @ (silencioso) ── */
+    if (i < len && (text[i] == '-' || text[i] == '@') &&
+        i + 1 < len && text[i + 1] != ' ' && text[i + 1] != '\t') {
+        cb_flush(&buf, line, SPAN_KW_NORMAL);
+        char pref[2] = { text[i], '\0' };
+        emit_span(line, pref, SPAN_KW_KEYWORD);
+        i++;
+        makefile_scan_body(line, text, &i, len, &buf, SPAN_KW_STRING);
+        return 0;
+    }
+
+    /* ── palabra al inicio: directiva, variable o target ── */
+    if (i < len && (isalpha((unsigned char)text[i]) || text[i] == '_' ||
+                    text[i] == '.' || text[i] == '%')) {
+        int start = i;
+        /* nombre: letras, dígitos, _, ., -, % y / (targets con ruta) */
+        while (i < len && (isalnum((unsigned char)text[i]) || text[i] == '_' ||
+                           text[i] == '.' || text[i] == '-' || text[i] == '%' ||
+                           text[i] == '/'))
+            i++;
+        int word_end = i;
+        char *word = strndup(text + start, (size_t)(word_end - start));
+        int j = i;
+        while (j < len && (text[j] == ' ' || text[j] == '\t')) j++;
+
+        /* ── directiva: palabra de solo letras + espacio o EOL ── */
+        if (j >= len || j > word_end) {
+            int letters_only = 1;
+            for (int k = start; k < word_end; k++)
+                if (!isalpha((unsigned char)text[k])) {
+                    letters_only = 0;
+                    break;
+                }
+            if (letters_only && str_in_array(word, makefile_directives)) {
+                cb_flush(&buf, line, SPAN_KW_NORMAL);
+                emit_span(line, word, SPAN_KW_KEYWORD);
+                free(word);
+                /* espacios tras la directiva → texto normal */
+                if (j > word_end) {
+                    char *gap = strndup(text + word_end,
+                                        (size_t)(j - word_end));
+                    emit_span(line, gap, SPAN_KW_NORMAL);
+                    free(gap);
+                }
+                /* tras la directiva: definición de variable
+                   (export FOO=bar) → clave + valor; si no, el resto
+                   va como texto normal con referencias */
+                if (makefile_emit_var_def(line, text, &j, len))
+                    makefile_scan_body(line, text, &j, len, &buf,
+                                       SPAN_KW_STRING);
+                else
+                    makefile_scan_body(line, text, &j, len, &buf,
+                                       SPAN_KW_NORMAL);
+                return 0;
+            }
+        }
+
+        /* ── variable: CLAVE=valor o CLAVE := ?= += != ── */
+        int is_assign = (j < len && text[j] == '=') ||
+                        (j + 1 < len && (text[j] == ':' || text[j] == '?' ||
+                                         text[j] == '+' || text[j] == '!') &&
+                         text[j + 1] == '=');
+        if (is_assign) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, word, SPAN_KW_KEYWORD);
+            free(word);
+            /* espacios entre la clave y el operador → texto normal */
+            if (j > word_end) {
+                char *gap = strndup(text + word_end,
+                                    (size_t)(j - word_end));
+                emit_span(line, gap, SPAN_KW_NORMAL);
+                free(gap);
+            }
+            /* operador de asignación → texto normal */
+            int op_len = (text[j] == '=') ? 1 : 2;
+            char *op = strndup(text + j, (size_t)op_len);
+            emit_span(line, op, SPAN_KW_NORMAL);
+            free(op);
+            /* valor: string con referencias $(...) y # (tras el operador) */
+            j += op_len;
+            makefile_scan_body(line, text, &j, len, &buf, SPAN_KW_STRING);
+            return 0;
+        }
+
+        /* ── target: nombre: dependencias (y ::) ── */
+        if (j < len && text[j] == ':' &&
+            !(j + 1 < len && text[j + 1] == '=')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            emit_span(line, word, SPAN_KW_KEYWORD);
+            free(word);
+            /* espacios entre el target y los ':' → texto normal */
+            if (j > word_end) {
+                char *gap = strndup(text + word_end,
+                                    (size_t)(j - word_end));
+                emit_span(line, gap, SPAN_KW_NORMAL);
+                free(gap);
+            }
+            /* ':' y espacios → texto normal; las dependencias llevan
+               el mismo color con referencias $(...) como tipo */
+            while (j < len && (text[j] == ':' || text[j] == ' ' ||
+                               text[j] == '\t'))
+                cb_put(&buf, text[j++]);
+            makefile_scan_body(line, text, &j, len, &buf, SPAN_KW_NORMAL);
+            return 0;
+        }
+
+        free(word);
+        /* ni directiva ni variable ni target: la palabra se devuelve
+           al buffer y el resto se trata como cuerpo de receta */
+        for (int k = start; k < word_end; k++) cb_put(&buf, text[k]);
+        i = word_end;
+    }
+
+    /* ── cualquier otra línea: cuerpo de receta (o texto suelto) ── */
+    makefile_scan_body(line, text, &i, len, &buf, SPAN_KW_STRING);
+    return 0;
+}
+
 int highlight_line(ParsedLine *line, const char *text,
                    const char *lang, HighlightState *st) {
     const LangDef *ld = find_lang(lang);
@@ -1863,6 +2168,10 @@ int highlight_line(ParsedLine *line, const char *text,
     /* HCL/Terraform: tokenizador especializado (bloques, heredocs) */
     if (ld->is_hcl)
         return highlight_hcl_line(line, text, st);
+
+    /* Makefile: tokenizador especializado (variables, targets, recetas) */
+    if (ld->is_makefile)
+        return highlight_makefile_line(line, text, st);
 
     int   len = (int)strlen(text);
     int   i   = 0;
