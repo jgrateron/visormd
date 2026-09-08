@@ -24,6 +24,7 @@ typedef struct {
     int          is_dockerfile;   /* Dockerfile: instrucciones, --flags, # comentarios */
     int          is_hcl;          /* HCL/Terraform: bloques, atributos, heredocs */
     int          is_makefile;     /* Makefile: variables, targets, recetas, $(VAR) */
+    int          is_css;          /* CSS: selectores, propiedades, @media, #hex */
 } LangDef;
 
 /* ──────────────────────────────────────────────
@@ -678,80 +679,113 @@ static const char *makefile_directives[] = {
 };
 
 /* ──────────────────────────────────────────────
+ * CSS: los selectores se resaltan con un tokenizador
+ * especializado; aquí van las etiquetas HTML que
+ * actúan como selectores de tipo (div, p, a...)
+ * ────────────────────────────────────────────── */
+static const char *css_keywords[] = {
+    NULL
+};
+
+static const char *css_types[] = {
+    "a", "abbr", "address", "article", "aside", "audio",
+    "b", "base", "bdi", "bdo", "blockquote", "body", "button",
+    "canvas", "caption", "cite", "code", "col", "colgroup",
+    "data", "datalist", "dd", "del", "details", "dfn", "dialog",
+    "div", "dl", "dt", "em", "embed",
+    "fieldset", "figcaption", "figure", "footer", "form",
+    "h1", "h2", "h3", "h4", "h5", "h6", "head", "header",
+    "hgroup", "hr", "html", "i", "iframe", "img", "input",
+    "ins", "kbd", "label", "legend", "li", "link", "main",
+    "map", "mark", "menu", "meta", "meter", "nav", "noscript",
+    "object", "ol", "optgroup", "option", "output", "p", "param",
+    "picture", "pre", "progress", "q", "s", "samp", "script",
+    "section", "select", "slot", "small", "source", "span",
+    "strong", "style", "sub", "summary", "sup", "svg", "table",
+    "tbody", "td", "template", "textarea", "tfoot", "th", "thead",
+    "time", "title", "tr", "track", "u", "ul", "var", "video",
+    "g", "path", "rect", "circle", "ellipse", "line",
+    "polygon", "polyline", "text", "defs", "use", "tspan",
+    NULL
+};
+
+/* ──────────────────────────────────────────────
  * tabla de lenguajes soportados
  * ────────────────────────────────────────────── */
 static const LangDef languages[] = {
-    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "rust",       rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "rs",         rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
-    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
-    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-    { "gitignore",  gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    { "git-ignore", gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    { "ignore",     gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    { "dotenv",     dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
-    { "env",        dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
-    { "dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "Dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "docker",     dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
-    { "hcl",        hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
-    { "tf",         hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
-    { "terraform",  hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
-    { "makefile",   makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    { "Makefile",   makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    { "make",       makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    { "mk",         makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    { "c",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "c++",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cc",         cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cxx",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "h",          c_keywords,   c_types,          1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "hpp",        cpp_keywords, cpp_types,        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "java",       java_keywords, java_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "javascript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "js",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "ts",         js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "typescript", js_keywords,  js_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "cs",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "csharp",     cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "c#",         cs_keywords,  cs_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vb",         vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vbnet",      vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "vb.net",     vb_keywords,  vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "visualbasic", vb_keywords, vb_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "json",       json_keywords, json_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "go",         go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "golang",     go_keywords,  go_types,         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "rust",       rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "rs",         rust_keywords, rust_types,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "properties", properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "props",      properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "ini",        properties_keywords, properties_types, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+    { "yaml",       yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "yml",        yaml_keywords, yaml_types,      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
+    { "python",     py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "py",         py_keywords,  py_types,         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "xml",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "html",       xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "htm",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "xhtml",      xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "svg",        xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "markup",     xml_keywords, xml_types,        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "sql",        sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "mysql",      sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "mariadb",    sql_keywords, sql_types,        0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "pgsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "postgresql", sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "postgres",   sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "plpgsql",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "sqlite",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "sqlite3",    sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "mssql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "tsql",       sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "plsql",      sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "oracle",     sql_keywords, sql_types,        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "kotlin",     kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "kt",         kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "kts",        kotlin_keywords, kotlin_types,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "gherkin",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "feature",    gherkin_keywords, gherkin_types, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "gitignore",  gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "git-ignore", gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "ignore",     gitignore_keywords, gitignore_types, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+    { "dotenv",     dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
+    { "env",        dotenv_keywords, dotenv_types,    0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
+    { "dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "Dockerfile", dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "docker",     dockerfile_keywords, dockerfile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    { "hcl",        hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "tf",         hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "terraform",  hcl_keywords,  hcl_types,       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
+    { "makefile",   makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "Makefile",   makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "make",       makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "mk",         makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    { "css",        css_keywords,  css_types,        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    { "scss",       css_keywords,  css_types,        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 /* ──────────────────────────────────────────────
@@ -890,6 +924,7 @@ void highlight_state_init(HighlightState *st) {
     st->yaml_block_indent = 0;
     st->in_hcl_heredoc   = 0;
     st->hcl_heredoc_term[0] = '\0';
+    st->css_brace_depth  = 0;
 }
 
 int highlight_supported(const char *lang) {
@@ -2136,6 +2171,343 @@ static int highlight_makefile_line(ParsedLine *line, const char *text,
     return 0;
 }
 
+/* ══════════════════════════════════════════════════════════════
+ * tokenizador CSS: selectores (.clase, #id, etiqueta, :pseudo,
+ * [atributo]), propiedades (nombre: valor), reglas @media, colores
+ * #hex y números con unidades. La profundidad de llaves { } persiste
+ * entre líneas (css_brace_depth) para saber cuándo un nombre seguido
+ * de ":" es una propiedad (KEYWORD) y cuándo parte de un selector.
+ * ══════════════════════════════════════════════════════════════ */
+
+/* ── ¿la cadena s comienza con una unidad CSS conocida (px, rem,
+   vh, s, deg...)? devuelve su longitud o 0 ── */
+static int css_unit_at(const char *s) {
+    static const char *units[] = {
+        "vmin", "vmax", "rem", "vw", "vh", "dpi", "dpcm", "dppx",
+        "em", "ex", "ch", "cm", "mm", "in", "pt", "pc", "px",
+        "q", "ms", "s", "deg", "grad", "rad", "turn",
+        "hz", "khz", "fr", "x",
+        NULL
+    };
+    for (int u = 0; units[u]; u++) {
+        size_t ul = strlen(units[u]);
+        if (strncmp(s, units[u], ul) == 0 &&
+            !isalpha((unsigned char)s[ul]))
+            return (int)ul;
+    }
+    return 0;
+}
+
+static int highlight_css_line(ParsedLine *line, const char *text,
+                              HighlightState *st) {
+    int len = (int)strlen(text);
+    int i   = 0;
+    int depth    = st->css_brace_depth; /* llaves abiertas en líneas previas */
+    int in_value = 0;  /* dentro del valor de una declaración (tras ":") */
+    int in_prop   = 0;  /* el último token fue una propiedad (nombre:) */
+    CBuf buf;
+    cb_init(&buf);
+
+    /* ── si venimos de un comentario / * ... * / abierto ── */
+    if (st->in_block_comment) {
+        const char *end = strstr(text, "*/");
+        if (end) {
+            int comment_end = (int)(end - text) + 2;
+            char *comment = strndup(text, (size_t)comment_end);
+            emit_span(line, comment, SPAN_KW_COMMENT);
+            free(comment);
+            i = comment_end;
+            st->in_block_comment = 0;
+        } else {
+            /* toda la línea es comentario */
+            emit_span(line, text, SPAN_KW_COMMENT);
+            return 0;
+        }
+    }
+
+    while (i < len) {
+        /* ── espacios y tabs → texto normal ── */
+        if (text[i] == ' ' || text[i] == '\t') {
+            cb_put(&buf, text[i++]);
+            continue;
+        }
+
+        /* ── comentario multilinea apertura: / * ── */
+        if (text[i] == '/' && text[i + 1] == '*') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i += 2;
+            const char *end = strstr(text + i, "*/");
+            if (end) {
+                i = (int)(end - text) + 2;
+                char *comment = strndup(text + start, (size_t)(i - start));
+                emit_span(line, comment, SPAN_KW_COMMENT);
+                free(comment);
+            } else {
+                /* multilínea que continúa en la siguiente línea */
+                emit_span(line, text + start, SPAN_KW_COMMENT);
+                st->in_block_comment = 1;
+                return 0;
+            }
+            continue;
+        }
+
+        /* ── string "..." o '...' (con \escapes) ── */
+        if (text[i] == '"' || text[i] == '\'') {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            in_prop = 0;
+            int start = i;
+            i++;
+            while (i < len && text[i] != text[start]) {
+                if (text[i] == '\\' && i + 1 < len) i++;
+                i++;
+            }
+            if (i < len) i++;  /* comilla de cierre */
+            char *s = strndup(text + start, (size_t)(i - start));
+            emit_span(line, s, SPAN_KW_STRING);
+            free(s);
+            continue;
+        }
+
+        /* ── número: 600px, 1.5rem, 100%, .5, -2em ── */
+        if (isdigit((unsigned char)text[i]) ||
+            (text[i] == '-' && i + 1 < len &&
+             isdigit((unsigned char)text[i + 1])) ||
+            (text[i] == '.' && i + 1 < len &&
+             isdigit((unsigned char)text[i + 1]))) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            in_prop = 0;
+            int start = i;
+            if (text[i] == '-') i++;
+            while (i < len && isdigit((unsigned char)text[i])) i++;
+            /* parte fraccionaria */
+            if (i + 1 < len && text[i] == '.' &&
+                isdigit((unsigned char)text[i + 1])) {
+                i++;
+                while (i < len && isdigit((unsigned char)text[i])) i++;
+            }
+            /* unidad: % o unidad conocida (px, em, vh, s...) */
+            if (i < len && text[i] == '%') i++;
+            else if (i < len) {
+                int ul = css_unit_at(text + i);
+                if (ul) i += ul;
+            }
+            char *num = strndup(text + start, (size_t)(i - start));
+            emit_span(line, num, SPAN_KW_NUMBER);
+            free(num);
+            continue;
+        }
+
+        /* ── color hex #fff / #112233 o selector de id #main ── */
+        if (text[i] == '#') {
+            int j = i + 1;
+            int nhex = 0;
+            while (j < len && is_hex_digit(text[j])) { j++; nhex++; }
+            /* si tras los dígitos hex sigue un carácter de id
+               (#fff-x es un id, no un color) no es color */
+            int continues = (j < len) &&
+                (isalnum((unsigned char)text[j]) || text[j] == '_' ||
+                 text[j] == '-');
+            if (!continues && (nhex == 3 || nhex == 4 ||
+                               nhex == 6 || nhex == 8)) {
+                cb_flush(&buf, line, SPAN_KW_NORMAL);
+                char *color = strndup(text + i, (size_t)(j - i));
+                emit_span(line, color, SPAN_KW_NUMBER);
+                free(color);
+                i = j;
+                continue;
+            }
+            /* selector de id: #nombre (solo fuera de valores) */
+            if (!in_value && j < len &&
+                (isalpha((unsigned char)text[j]) || text[j] == '_' ||
+                 text[j] == '-')) {
+                cb_flush(&buf, line, SPAN_KW_NORMAL);
+                in_prop = 0;
+                int start = i;
+                i = j;
+                while (i < len && (isalnum((unsigned char)text[i]) ||
+                                   text[i] == '_' || text[i] == '-' ||
+                                   (unsigned char)text[i] >= 0x80))
+                    i++;
+                char *sel = strndup(text + start, (size_t)(i - start));
+                emit_span(line, sel, SPAN_KW_TYPE);
+                free(sel);
+                continue;
+            }
+        }
+
+        /* ── regla @: @media, @keyframes, @import... ── */
+        if (text[i] == '@' &&
+            (isalpha((unsigned char)text[i + 1]) || text[i + 1] == '-' ||
+             text[i + 1] == '_')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            in_prop = 0;
+            int start = i;
+            i++;
+            while (i < len && (isalnum((unsigned char)text[i]) ||
+                               text[i] == '_' || text[i] == '-' ||
+                               (unsigned char)text[i] >= 0x80))
+                i++;
+            char *at = strndup(text + start, (size_t)(i - start));
+            emit_span(line, at, SPAN_KW_PREPROC);
+            free(at);
+            continue;
+        }
+
+        /* ── selector de clase: .nombre (fuera de valores) ── */
+        if (text[i] == '.' && !in_value &&
+            (isalpha((unsigned char)text[i + 1]) || text[i + 1] == '_' ||
+             text[i + 1] == '-')) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            in_prop = 0;
+            int start = i;
+            i++;
+            while (i < len && (isalnum((unsigned char)text[i]) ||
+                               text[i] == '_' || text[i] == '-' ||
+                               (unsigned char)text[i] >= 0x80))
+                i++;
+            char *sel = strndup(text + start, (size_t)(i - start));
+            emit_span(line, sel, SPAN_KW_TYPE);
+            free(sel);
+            continue;
+        }
+
+        /* ── selector de atributo: [type="text"], [disabled] ── */
+        if (text[i] == '[' && !in_value) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            in_prop = 0;
+            int start = i;
+            i++;
+            while (i < len && text[i] != ']') {
+                /* las comillas internas se resaltan como string */
+                if (text[i] == '"' || text[i] == '\'') {
+                    if (i > start) {
+                        char *seg = strndup(text + start,
+                                            (size_t)(i - start));
+                        emit_span(line, seg, SPAN_KW_TYPE);
+                        free(seg);
+                    }
+                    int q = text[i];
+                    int s2 = i;
+                    i++;
+                    while (i < len && text[i] != q) {
+                        if (text[i] == '\\' && i + 1 < len) i++;
+                        i++;
+                    }
+                    if (i < len) i++;
+                    char *str = strndup(text + s2, (size_t)(i - s2));
+                    emit_span(line, str, SPAN_KW_STRING);
+                    free(str);
+                    start = i;
+                } else if (text[i] == '\\' && i + 1 < len) {
+                    i += 2;
+                } else {
+                    i++;
+                }
+            }
+            if (i < len) i++;  /* ']' de cierre */
+            if (i > start) {
+                char *seg = strndup(text + start, (size_t)(i - start));
+                emit_span(line, seg, SPAN_KW_TYPE);
+                free(seg);
+            }
+            continue;
+        }
+
+        /* ── ":" — tras una propiedad abre el valor; en un selector
+           introduce una pseudo-clase/elemento (:hover, ::before) ── */
+        if (text[i] == ':' && !in_value) {
+            if (in_prop) {
+                in_prop  = 0;
+                in_value = 1;
+                cb_put(&buf, text[i++]);
+                continue;
+            }
+            int j = i;
+            if (text[j + 1] == ':') j++;  /* ::before, ::selection */
+            if (j + 1 < len &&
+                (isalpha((unsigned char)text[j + 1]) ||
+                 text[j + 1] == '_' || text[j + 1] == '-')) {
+                cb_flush(&buf, line, SPAN_KW_NORMAL);
+                int start = i;
+                if (text[i + 1] == ':') i++;
+                i++;
+                while (i < len && (isalnum((unsigned char)text[i]) ||
+                                   text[i] == '_' || text[i] == '-' ||
+                                   (unsigned char)text[i] >= 0x80))
+                    i++;
+                char *sel = strndup(text + start, (size_t)(i - start));
+                emit_span(line, sel, SPAN_KW_TYPE);
+                free(sel);
+                continue;
+            }
+        }
+
+        /* ── ";" cierra el valor; "{" abre una regla y "}" la cierra ── */
+        if (text[i] == ';') {
+            in_value = 0;
+            cb_put(&buf, text[i++]);
+            continue;
+        }
+        if (text[i] == '{') {
+            depth++;
+            in_value = 0;
+            cb_put(&buf, text[i++]);
+            continue;
+        }
+        if (text[i] == '}') {
+            if (depth > 0) depth--;
+            in_value = 0;
+            cb_put(&buf, text[i++]);
+            continue;
+        }
+
+        /* ── identificador: etiqueta (div, p, a...), propiedad
+           (nombre: dentro de una regla) o valor (none, auto...) ── */
+        if (isalpha((unsigned char)text[i]) || text[i] == '_' ||
+            (unsigned char)text[i] >= 0x80 ||
+            (text[i] == '-' &&
+             (isalpha((unsigned char)text[i + 1]) ||
+              text[i + 1] == '-'))) {
+            cb_flush(&buf, line, SPAN_KW_NORMAL);
+            int start = i;
+            i++;
+            while (i < len && (isalnum((unsigned char)text[i]) ||
+                               text[i] == '_' || text[i] == '-' ||
+                               (unsigned char)text[i] >= 0x80))
+                i++;
+            char *word = strndup(text + start, (size_t)(i - start));
+
+            if (in_value) {
+                /* valor de una declaración → texto normal */
+                emit_span(line, word, SPAN_KW_NORMAL);
+            } else if (str_in_array(word, css_types)) {
+                /* etiqueta como selector de tipo */
+                emit_span(line, word, SPAN_KW_TYPE);
+            } else {
+                /* propiedad: nombre seguido de ":" dentro de una regla */
+                int j = i;
+                while (j < len && (text[j] == ' ' || text[j] == '\t')) j++;
+                if (depth > 0 && j < len && text[j] == ':') {
+                    emit_span(line, word, SPAN_KW_KEYWORD);
+                    in_prop = 1;
+                } else {
+                    emit_span(line, word, SPAN_KW_NORMAL);
+                }
+            }
+            free(word);
+            continue;
+        }
+
+        /* ── cualquier otro carácter: operadores, puntuación, etc. ── */
+        cb_put(&buf, text[i++]);
+    }
+
+    st->css_brace_depth = depth;
+    cb_flush(&buf, line, SPAN_KW_NORMAL);
+    return 0;
+}
+
 int highlight_line(ParsedLine *line, const char *text,
                    const char *lang, HighlightState *st) {
     const LangDef *ld = find_lang(lang);
@@ -2172,6 +2544,10 @@ int highlight_line(ParsedLine *line, const char *text,
     /* Makefile: tokenizador especializado (variables, targets, recetas) */
     if (ld->is_makefile)
         return highlight_makefile_line(line, text, st);
+
+    /* CSS: tokenizador especializado (selectores, propiedades, @media) */
+    if (ld->is_css)
+        return highlight_css_line(line, text, st);
 
     int   len = (int)strlen(text);
     int   i   = 0;

@@ -13,6 +13,8 @@ typedef struct {
     int in_hcl_heredoc;     /* dentro de un heredoc HCL (<<EOF / <<-EOF) */
     char hcl_heredoc_term[32]; /* terminador del heredoc ("EOF", "EOT"...)
                                   la línea que lo iguale cierra el bloque */
+    int css_brace_depth;    /* anidamiento de llaves { } CSS: distingue si un
+                               nombre seguido de ":" es propiedad o selector */
 } HighlightState;
 
 /* ── inicializar el estado ── */

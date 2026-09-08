@@ -1,0 +1,70 @@
+# CSS Highlight Test
+
+Selectors (classes, id, tags, pseudo), properties, values, units, hex colors, strings, comments and @media.
+
+```css
+/* estilos base del botón */
+.btn, .htmx-request .htmx-indicator {
+    display: inline-block;
+    margin: 1.5rem 10px 0;
+    color: #fff;
+}
+#main-header {
+    background-color: #112233;
+    border: 1px solid #f00;
+}
+a:hover {
+    text-decoration: underline;
+}
+a::before {
+    content: "» ";
+}
+input[type="checkbox"]:checked {
+    accent-color: #4CAF50;
+}
+p { font-size: 14px; line-height: 1.5; }
+```
+
+```css
+.htmx-indicator {
+    display: none;
+}
+.htmx-request .htmx-indicator {
+    display: inline-block;
+}
+.htmx-request.htmx-indicator {
+    display: inline-block;
+}
+```
+
+```css
+@media (max-width: 600px) {
+    .card {
+        width: 100%;
+        opacity: 0.5;
+    }
+    a { color: #00f; }
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+```
+
+```css
+/* comentario multilínea que
+   continúa en varias líneas */
+:root {
+    --main-color: #ff8800;
+    --spacing: 8px;
+}
+* { box-sizing: border-box; }
+```
+
+```css
+body {
+    font-family: "Open Sans", Arial, sans-serif;
+    background: #fff url(img/fondo.png) no-repeat center/cover;
+    height: calc(100vh - 20px);
+}
+```
