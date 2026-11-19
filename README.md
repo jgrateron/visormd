@@ -258,6 +258,8 @@ Ideas for future improvements, roughly ordered by impact.
 
 - **More light-background themes** — Paper, GitHub Light, Zen. The One Light theme already provides a solid base; adding variants is straightforward palette tweaking.
 
+- **RTL and complex-script support** — bidi reordering for Arabic/Hebrew, shaping for Devanagari, and grapheme-cluster-aware wrapping so combining marks stay attached to their base (e.g. a line break must not separate `क` from `ि`). Today Arabic is drawn in logical left-to-right order without joining, and complex scripts can misalign tables. Requires FriBidi/HarfBuzz or explicit terminal delegation.
+
 ### Low priority
 
 - **Recent files** — track the last ~10 opened files in config, accessible via `Ctrl+O` overlay.
