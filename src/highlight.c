@@ -785,6 +785,13 @@ static const LangDef languages[] = {
     { "mk",         makefile_keywords, makefile_types, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
     { "css",        css_keywords,  css_types,        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
     { "scss",       css_keywords,  css_types,        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    /* lenguajes sin resaltado: el bloque se muestra como texto plano.
+     * Se reconocen explícitamente para no depender del camino de
+     * "lenguaje desconocido". */
+    { "text",       NULL,         NULL,             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "txt",        NULL,         NULL,             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "plaintext",  NULL,         NULL,             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { "plain",      NULL,         NULL,             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
@@ -2512,6 +2519,15 @@ int highlight_line(ParsedLine *line, const char *text,
                    const char *lang, HighlightState *st) {
     const LangDef *ld = find_lang(lang);
     if (!ld || !line) return -1;
+
+    /* texto plano: lenguajes sin listas de palabras clave ni tipos
+     * (text, txt, plaintext, plain). Usamos SPAN_KW_NORMAL en lugar de
+     * SPAN_NORMAL para que el bloque no herede CP_CODE_BLOCK y se vea
+     * con el color de texto normal. */
+    if (!ld->keywords && !ld->types) {
+        emit_span(line, text, SPAN_KW_NORMAL);
+        return 0;
+    }
 
     /* XML/HTML: usar tokenizador especializado */
     if (ld->is_xml)
